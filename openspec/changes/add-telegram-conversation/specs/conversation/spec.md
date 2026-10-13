@@ -21,6 +21,18 @@ arriving later SHALL start the next turn.
 - **THEN** the reply is prepared again including the new message, and only
   that reply is sent
 
+#### Scenario: Follow-up while a draft is visible
+
+- **WHEN** the owner sends another message while part of the reply is
+  already visible as a draft
+- **THEN** the draft is replaced and the reply is prepared again with the new
+  message, at most once per turn
+
+#### Scenario: Button press or poll vote
+
+- **WHEN** the owner presses a quick reply or votes in a poll
+- **THEN** it joins or starts a turn exactly like a typed message
+
 #### Scenario: Messages while already answering
 
 - **WHEN** a further message arrives after the regenerated reply has started

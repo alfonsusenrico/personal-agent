@@ -4,7 +4,8 @@
 
 The assistant SHALL record each accepted inbound event once, permanently and
 without later modification, with: the person, channel, external identifiers,
-kind (message, edit, or unsupported content), modality, the time it occurred
+kind (message, edit, unsupported content, button press, poll vote, or stop),
+modality, the time it occurred
 in UTC, the person's timezone at that moment, the trust level, any forward
 origin, any reply reference, the text, and the raw channel payload. Edits SHALL
 be recorded as new events that reference the original.
@@ -20,6 +21,12 @@ be recorded as new events that reference the original.
 - **WHEN** the owner edits that message
 - **THEN** a new edit event references the original, and the original event
   is unchanged
+
+#### Scenario: Button press recorded
+
+- **WHEN** the owner presses a quick reply labelled "Tomorrow"
+- **THEN** one event of kind `button` exists with the text "Tomorrow" and a
+  link to the message that carried the button
 
 ### Requirement: Forwarded content is marked untrusted
 

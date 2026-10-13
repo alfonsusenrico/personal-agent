@@ -1,5 +1,9 @@
 # Verification: add-telegram-conversation
 
+Status: the plain-text version below is verified. On 2026-10-13 the owner
+folded Telegram's full output features into this change (tasks 5.1-5.7);
+their verification is added when they are implemented.
+
 Branch `feat/telegram-conversation`, working tree on top of `main` at
 `7ef1199`, 2026-10-13. Local only: macOS host, Docker Compose, Postgres 16
 (`127.0.0.1:54331`), the local llm-gateway (`127.0.0.1:8360`, client pinned
@@ -57,7 +61,7 @@ random `call_key` (UUID) that names its calls. Regression test:
 `test_a_reset_database_never_reuses_a_call_id`; the rerun passed 16 of 16.
 The design and `AGENTS.md` record the rule.
 
-## Effort comparison (task 5.2)
+## Effort comparison (task 6.2, plain-text version)
 
 Same 16 scripts, 19 calls each, gpt-6-luna through the `reply` profile:
 
@@ -83,7 +87,7 @@ Same 16 scripts, 19 calls each, gpt-6-luna through the `reply` profile:
 
 ## Not verified yet
 
-- Task 5.1 on Telegram with the real model needs the owner to send the
+- Task 6.1 on Telegram with the real model needs the owner to send the
   messages: burst, mid-turn follow-up, edits, voice note and photo, a
   forward, a restart while a reply is pending, an offline period, and
   English, Indonesian, and mixed messages. Its results, per-turn cost, and a
