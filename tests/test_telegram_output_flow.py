@@ -215,9 +215,7 @@ async def test_poll_is_sent_after_the_message_and_votes_come_back(
 async def test_a_poll_alone_is_sent_without_a_message(
     agent: Agent[FakeResponses], clock: FakeClock
 ) -> None:
-    agent.responses.default_reply = (
-        'Which team?\n<pa-poll question="Which team?"><option>A</option><option>B</option></pa-poll>'
-    )
+    agent.responses.default_reply = 'Which team?\n<pa-poll question="Which team?"><option>A</option><option>B</option></pa-poll>'
     await agent.receive(message_update(1, "poll: A or B", date=clock.now))
     await agent.settle()
 
