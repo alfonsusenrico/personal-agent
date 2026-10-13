@@ -160,6 +160,19 @@ Owner's desktop client, real model, 2026-10-13.
   with no language keeps the current one). Paid rerun of `team-poll`,
   `command-keeps-language`, `dinner-poll`, `mixed-language`: 4/4, USD
   0.001245; the poll arrived alone and "/stop" got "Okay."
+- Third session (turns 13-16, USD 0.002019): the celebrate effect played
+  (its unofficial ID works); an edit after the reply was answered as a reply
+  to the edited message, correcting the earlier celebration; a photo got an
+  honest "I can't view the photo".
+- Defect: the desktop client's Stop button arrived as a typed `/stop`
+  command, not as `stopped_message_generation`, so it joined the turn and
+  the answer was written again (turn 13, generation 2, USD 0.000586 spent on
+  the superseded one). The earlier "/stop" at 21.41 was the same button,
+  pressed on the "Thinking…" draft that lingers after a reaction-only reply.
+  Fixed in `9f95740`: `/stop` is a Stop press
+  (`test_a_typed_stop_command_stops_the_reply`,
+  `test_a_stop_command_with_nothing_running_is_not_answered`,
+  `test_a_stop_command_is_a_stop_press_not_a_message`).
 - Owner decisions, 2026-10-13: Telegram reply keyboards are not needed now
   (inline quick replies are enough; the question was a test), and a mixed
   English and Indonesian message answered mostly in Indonesian is accepted.
