@@ -78,12 +78,15 @@ Same 16 scripts, 19 calls each, gpt-6-luna through the `reply` profile:
 - Medium gave the fuller detailed answer (a year-by-year table, a comparison
   with simple interest); low was shorter and assumed rupiah.
 - Both read "let's meet at 3 at the cafe" as an invitation to the assistant
-  ("I can't meet in person"). This is a persona question for the owner.
+  ("I can't meet in person"). The owner judged the script unrealistic (a plan
+  is phrased as a request, such as "schedule me a meeting at 3 at X with N"),
+  so the script was changed, not the persona. Rerun at medium (USD
+  0.000258): it said it cannot add calendar entries yet, asked for the date,
+  and after the edit noted that 4 PM that day had passed.
 - The mixed English and Indonesian message was answered in Indonesian only.
 - No prompt caching: these prompts stay under the provider's 1,024-token
   minimum. Real conversations with a recent window exceed it.
-- Default kept: **medium**, the owner's stated preference, pending the
-  owner's review of the transcripts (`research/eval/`, local only).
+- Default: **medium**, confirmed by the owner on 2026-10-13.
 
 ## Not verified yet
 

@@ -1,15 +1,15 @@
 name: edit-after-reply
-description: Changing a message after the reply gets a new reply that responds to the change.
+description: Changing a request after the reply gets a new reply that responds to the change.
 steps:
-  - send: "let's meet at 3 at the cafe"
+  - send: "schedule me a meeting at 3 at Kopi Kalyan with Dina"
     ref: plan
   - settle: true
   - wait: 60
   - edit:
       ref: plan
-      text: "let's meet at 4 at the cafe"
+      text: "schedule me a meeting at 4 at Kopi Kalyan with Dina"
 expect:
   turns: 2
   model_calls: 2
-  user_contains: ["Before: let's meet at 3 at the cafe\nAfter: let's meet at 4 at the cafe"]
+  user_contains: ["Before: schedule me a meeting at 3 at Kopi Kalyan with Dina\nAfter: schedule me a meeting at 4 at Kopi Kalyan with Dina"]
   context_contains: ["edited a message you already answered"]
