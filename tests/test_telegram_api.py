@@ -9,7 +9,6 @@ from pydantic import SecretStr
 
 from personal_agent.logging_setup import quiet_url_logging
 from personal_agent.telegram.api import (
-    THINKING_PLACEHOLDER,
     TelegramApi,
     TelegramConflict,
     TelegramError,
@@ -138,23 +137,15 @@ async def test_rich_message_carries_markdown_reply_and_effect() -> None:
     ]
 
 
-async def test_empty_draft_is_the_thinking_placeholder_with_stop() -> None:
+async def test_drafts_are_rich_with_stop_and_typing_is_a_chat_action() -> None:
     calls, transport = _capture()
     api = _api(transport)
 
-    await api.send_draft(chat_id="1001", draft_id=7, markdown="")
+    await api.send_typing(chat_id="1001")
     await api.send_draft(chat_id="1001", draft_id=7, markdown="So far")
 
     assert calls == [
-        (
-            "sendRichMessageDraft",
-            {
-                "chat_id": 1001,
-                "draft_id": 7,
-                "rich_message": {"markdown": THINKING_PLACEHOLDER},
-                "can_stop": True,
-            },
-        ),
+        ("sendChatAction", {"chat_id": "1001", "action": "typing"}),
         (
             "sendRichMessageDraft",
             {

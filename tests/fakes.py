@@ -53,6 +53,7 @@ class FakeTelegramServer:
         self.updates: list[dict[str, Any]] = []
         self.sent: list[dict[str, Any]] = []
         self.drafts: list[dict[str, Any]] = []
+        self.typing = 0
         self.edits: list[dict[str, Any]] = []
         self.callback_answers: list[dict[str, Any]] = []
         # Responses to return instead of success, per method, in order.
@@ -83,6 +84,9 @@ class FakeTelegramServer:
             return _ok(result)
         if method == "sendRichMessageDraft":
             self.drafts.append({"method": method, **body})
+            return _ok(True)
+        if method == "sendChatAction":
+            self.typing += 1
             return _ok(True)
         if method == "editMessageText":
             self.edits.append(body)

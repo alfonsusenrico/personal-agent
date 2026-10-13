@@ -12,8 +12,8 @@ assistant usable on Telegram and fixes those foundations.
 
 - The owner messages the assistant's own Telegram bot and gets short, natural
   replies:
-  - a live draft while it thinks ("Thinking…", then the text as it is
-    written), with a Stop button;
+  - "typing…" while it thinks, then a live draft of the text as it is
+    written, with a Stop button;
   - quick bursts of messages answered as one;
   - replies in the language of the owner's latest message;
   - awareness of the current date and time.

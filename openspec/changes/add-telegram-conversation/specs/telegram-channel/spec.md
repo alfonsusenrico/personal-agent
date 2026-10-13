@@ -39,17 +39,23 @@ update is durably stored, and SHALL record each update at most once.
 
 ### Requirement: Replies stream as a live draft
 
-While a reply is being prepared, the assistant SHALL show it as a Telegram
-draft in the private chat: a thinking placeholder first, then the text written
-so far, refreshed before the draft expires and offering a Stop button. Draft
-updates SHALL never show directives or unfinished markup, and a failed draft
-update SHALL never delay or change the final reply.
+While a reply is being prepared, the assistant SHALL show Telegram's typing
+status until the model has written visible text, and from then on a Telegram
+draft in the private chat with the text written so far, refreshed before the
+draft expires and offering a Stop button. Draft updates SHALL never show
+directives or unfinished markup, and a failed draft or typing update SHALL
+never delay or change the final reply.
 
 #### Scenario: Slow reply
 
 - **WHEN** preparing a reply takes 40 seconds
-- **THEN** a draft stays visible the whole time, first as a placeholder and
-  then with the text so far, and the final message replaces it
+- **THEN** the typing status shows while the model thinks, then a draft
+  stays visible with the text so far, and the final message replaces it
+
+#### Scenario: Reply that is only a reaction
+
+- **WHEN** the reply is only a reaction to the owner's message
+- **THEN** no draft is ever shown, so nothing is left behind in the chat
 
 #### Scenario: Draft update rejected
 

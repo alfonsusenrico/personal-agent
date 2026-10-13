@@ -267,7 +267,7 @@ turn runner, and sender. Postgres is the queue.
 
 - A session-level advisory lock ensures that only one worker per database
   polls the bot. Telegram also refuses concurrent `getUpdates`.
-- A live draft replaces the typing action (decision 15).
+- A live draft follows the typing action once text is written (decision 15).
 - Rich replies are split only above Telegram's rich limits (rare at 2,000
   output tokens); the plain-text fallback splits at paragraph, then sentence
   boundaries, under 4,000 characters.
@@ -351,12 +351,22 @@ directives.
 
 ### 15. Streaming drafts
 
-- Each generation streams through the gateway (`responses.stream`). The
-  first draft is `<tg-thinking>` with `can_stop`; then the text so far is
-  sent with `sendRichMessageDraft` at most once per
+- Each generation streams through the gateway (`responses.stream`). Until
+  the model writes visible text, the typing chat action is shown (refreshed
+  every 4 seconds, as it lasts 5); then the text so far is sent with
+  `sendRichMessageDraft` and `can_stop` at most once per
   `DRAFT_INTERVAL_SECONDS` (default 1), only when it changed, with
   unfinished tags and directives hidden. Drafts are refreshed at least every
   20 seconds, because they last 30.
+- Why no `<tg-thinking>` placeholder draft (owner decision after the live
+  check, 2026-10-13): the Bot API cannot withdraw a draft, only a sent
+  message replaces it. A reply that is only a reaction sends no message, so
+  the placeholder stayed visible with its Stop button for up to 30 seconds,
+  and the owner pressed Stop on it. Stop is therefore available only once
+  text streams; pressing it earlier would not save cost anyway (trade-off
+  below). Every draft uses the rich method, because a plain
+  `sendMessageDraft` was not cleared by the final `sendRichMessage` (live
+  check).
 - Each generation gets a random `draft_id`, stored on the turn, so a Stop
   press maps to its turn.
 - The final message still goes through the outbox (exactly once); Telegram

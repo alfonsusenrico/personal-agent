@@ -18,8 +18,6 @@ _DEFAULT_TIMEOUT = httpx2.Timeout(20.0, connect=10.0)
 # Telegram answers these when the chat, bot, or request itself is wrong; retrying
 # cannot succeed.
 PERMANENT_STATUSES = frozenset({400, 401, 403, 404})
-# Only valid in rich drafts; it never reaches a sent message.
-THINKING_PLACEHOLDER = "<tg-thinking>Thinking…</tg-thinking>"
 
 
 class TelegramError(Exception):
@@ -147,20 +145,23 @@ class TelegramApi:
         return _message_id(await self._call("sendRichMessage", payload))
 
     async def send_draft(self, *, chat_id: str, draft_id: int, markdown: str) -> None:
-        """Show a streaming preview with a Stop button; empty text shows "Thinking…".
+        """Show a streaming preview with a Stop button.
 
-        The placeholder is a rich draft too: the final sendRichMessage clears only a
-        rich draft, so a plain sendMessageDraft would stay in the chat beside it.
+        Always a rich draft: the final sendRichMessage clears only a rich draft, so a
+        plain sendMessageDraft would stay in the chat beside the reply.
         """
         await self._call(
             "sendRichMessageDraft",
             {
                 "chat_id": int(chat_id),
                 "draft_id": draft_id,
-                "rich_message": {"markdown": markdown or THINKING_PLACEHOLDER},
+                "rich_message": {"markdown": markdown},
                 "can_stop": True,
             },
         )
+
+    async def send_typing(self, *, chat_id: str) -> None:
+        await self._call("sendChatAction", {"chat_id": chat_id, "action": "typing"})
 
     async def edit_rich_message(self, *, chat_id: str, message_id: str, markdown: str) -> None:
         await self._call(

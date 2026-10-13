@@ -173,6 +173,12 @@ Owner's desktop client, real model, 2026-10-13.
   (`test_a_typed_stop_command_stops_the_reply`,
   `test_a_stop_command_with_nothing_running_is_not_answered`,
   `test_a_stop_command_is_a_stop_press_not_a_message`).
+- Owner decision after session 3: the "Thinking…" draft lingered up to 30
+  seconds after a reaction-only reply (Telegram cannot withdraw a draft).
+  Now the typing status shows until text is written, and drafts start with
+  the text (`test_a_reply_without_text_never_opens_a_draft`,
+  `test_typing_until_text_then_changing_text_then_refresh`,
+  `test_flood_control_waits_then_sends_the_same_text`).
 - Owner decisions, 2026-10-13: Telegram reply keyboards are not needed now
   (inline quick replies are enough; the question was a test), and a mixed
   English and Indonesian message answered mostly in Indonesian is accepted.

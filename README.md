@@ -77,9 +77,10 @@ docker compose up --build migrate
 
 How it behaves:
 
-- While it thinks you see a live draft: "Thinking…", then the reply as it is
-  written, with a Stop button. Stop discards the reply (the model call is
-  still paid for).
+- While it thinks you see "typing…", then a live draft of the reply as it is
+  written, with a Stop button (Telegram Desktop sends Stop as /stop, which
+  works the same). Stop discards the reply (the model call is still paid
+  for).
 - Replies are Telegram rich messages: plain text for chat, and tables,
   lists, code, formulas, or collapsible sections when they help. It can add
   quick-reply buttons (your press counts as your answer), link and copy
