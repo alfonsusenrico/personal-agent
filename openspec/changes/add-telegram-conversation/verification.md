@@ -148,7 +148,6 @@ Owner's desktop client, real model, 2026-10-13.
 - First turns: a burst of three messages merged into one turn and one
   answer; the local time (21.14 WIB) was correct; the formula reply arrived
   rich with no plain fallback; three replies cost USD 0.000583 in total.
-
 - Second session (turns 4-12, USD 0.00177): a 10-row table rendered
   rich; four quick replies, the press edited the message to "✓ Make a quiz";
   a native poll and its vote round trip; a poll vote and a button press
@@ -161,8 +160,9 @@ Owner's desktop client, real model, 2026-10-13.
   with no language keeps the current one). Paid rerun of `team-poll`,
   `command-keeps-language`, `dinner-poll`, `mixed-language`: 4/4, USD
   0.001245; the poll arrived alone and "/stop" got "Okay."
-- Not covered by the design: Telegram reply keyboards (the owner asked);
-  awaiting the owner's decision.
+- Owner decisions, 2026-10-13: Telegram reply keyboards are not needed now
+  (inline quick replies are enough; the question was a test), and a mixed
+  English and Indonesian message answered mostly in Indonesian is accepted.
 
 ## Not verified yet
 
