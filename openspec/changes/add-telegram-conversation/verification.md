@@ -149,6 +149,21 @@ Owner's desktop client, real model, 2026-10-13.
   answer; the local time (21.14 WIB) was correct; the formula reply arrived
   rich with no plain fallback; three replies cost USD 0.000583 in total.
 
+- Second session (turns 4-12, USD 0.00177): a 10-row table rendered
+  rich; four quick replies, the press edited the message to "✓ Make a quiz";
+  a native poll and its vote round trip; a poll vote and a button press
+  arriving together merged into one rethought turn; a quiz quick reply
+  answered; "thanks" got only a 👍 reaction; no plain-text fallback.
+- Fixed in `5d2a384`: the poll reply repeated the poll's question as a
+  separate message (guide wording plus a renderer rule that drops text equal
+  to the question; `test_a_poll_alone_is_sent_without_a_message`), and
+  "/stop" in an English chat was answered in Indonesian (persona: a message
+  with no language keeps the current one). Paid rerun of `team-poll`,
+  `command-keeps-language`, `dinner-poll`, `mixed-language`: 4/4, USD
+  0.001245; the poll arrived alone and "/stop" got "Okay."
+- Not covered by the design: Telegram reply keyboards (the owner asked);
+  awaiting the owner's decision.
+
 ## Not verified yet
 
 - Task 6.1 on Telegram with the real model needs the owner to send the
