@@ -179,6 +179,15 @@ Owner's desktop client, real model, 2026-10-13.
   the text (`test_a_reply_without_text_never_opens_a_draft`,
   `test_typing_until_text_then_changing_text_then_refresh`,
   `test_flood_control_waits_then_sends_the_same_text`).
+- Fourth session (2026-10-14): owner confirmed everything tested works.
+  "thanks!" showed typing then only a reaction (5.3 s, no leftover draft);
+  Stop on a streaming answer via the desktop `/stop` closed the turn with
+  nothing sent. Fixed after it: the stopped turn was logged as a warning
+  (now info; the typed-stop test asserts no warning), and a draft showed an
+  unfinished `**` and an empty list item (`draft_view` hides both). The
+  draft also showed "(10^{-43})" as raw text; three paid samples of the same
+  question (`science-detail`, USD 0.001916) did not reproduce it, so nothing
+  was changed for it.
 - Owner decisions, 2026-10-13: Telegram reply keyboards are not needed now
   (inline quick replies are enough; the question was a test), and a mixed
   English and Indonesian message answered mostly in Indonesian is accepted.

@@ -310,6 +310,10 @@ def strip_directives(text: str) -> str:
     return _LEFTOVER_DIRECTIVE.sub("", _strip_complete_directives(text)).strip()
 
 
+# A list item whose text has not been written yet.
+_DANGLING_LIST_MARKER = re.compile(r"(?:^|\n)[ \t]*(?:[-*+]|\d+\.)$")
+
+
 def draft_view(partial: str) -> str:
     """What a streaming draft may show: no directives, buttons, or unfinished markup."""
     text = _strip_complete_directives(partial)
@@ -324,7 +328,11 @@ def draft_view(partial: str) -> str:
         text += "\n```"
     if text.count("$$") % 2 == 1:
         text = text[: text.rfind("$$")]
-    return text.strip()
+    # Bold being written shows as literal asterisks until it is closed.
+    line_start = text.rfind("\n") + 1
+    if text[line_start:].count("**") % 2 == 1:
+        text = text[: text.rfind("**")]
+    return _DANGLING_LIST_MARKER.sub("", text.strip())
 
 
 def mark_chosen(markdown: str, label: str) -> str:

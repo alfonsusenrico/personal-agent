@@ -171,6 +171,9 @@ class TurnRunner:
                 len(turn_input.events),
                 len(commit.items),
             )
+        elif commit.outcome == "stopped":
+            # The owner's choice, not a fault.
+            logger.info("Turn %d closed as stopped", plan.turn_id)
         else:
             logger.warning("Turn %d %s: %s", plan.turn_id, commit.outcome, commit.failure_code)
         self._on_answer()

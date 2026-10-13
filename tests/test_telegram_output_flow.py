@@ -249,7 +249,10 @@ async def test_stop_discards_the_reply_and_the_next_reply_knows(
 
 
 async def test_a_typed_stop_command_stops_the_reply(
-    agent: Agent[FakeResponses], pool: AsyncConnectionPool, clock: FakeClock
+    agent: Agent[FakeResponses],
+    pool: AsyncConnectionPool,
+    clock: FakeClock,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     async def owner_types_stop(body: dict[str, Any]) -> None:
         if len(agent.responses.calls) == 1:
@@ -265,6 +268,8 @@ async def test_a_typed_stop_command_stops_the_reply(
     assert await _rows(pool, "SELECT text FROM message WHERE role = 'user'") == [
         ("explain the internet in detail",)
     ]
+    # Stopping is the owner's choice, not a fault worth a warning.
+    assert not [record for record in caplog.records if record.levelname == "WARNING"]
 
 
 async def test_a_stop_command_with_nothing_running_is_not_answered(

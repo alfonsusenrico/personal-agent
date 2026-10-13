@@ -148,6 +148,11 @@ def test_draft_view_hides_directives_buttons_and_unfinished_markup() -> None:
     assert draft_view("```python\nprint(1)") == "```python\nprint(1)\n```"
     assert draft_view('Sure <pa-poll question="x"><option>A') == "Sure"
     assert draft_view("") == ""
+    assert draft_view("Facts:\n- **Age:** 13.8 billion years\n- **") == (
+        "Facts:\n- **Age:** 13.8 billion years"
+    )
+    assert draft_view("Steps:\n1. Boil water\n2.") == "Steps:\n1. Boil water"
+    assert draft_view("It is **very") == "It is"
 
 
 def test_mark_chosen_replaces_quick_replies_only() -> None:

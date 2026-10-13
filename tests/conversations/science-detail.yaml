@@ -1,0 +1,8 @@
+name: science-detail
+description: A detailed science answer writes its numbers and formulas in Telegram's math syntax (owner review).
+steps:
+  - send: "explain in detail big bang theory"
+expect:
+  turns: 1
+fake_replies:
+  - "## The Big Bang\nThe universe began about 13.8 billion years ago; the earliest moments, about $10^{-43}$ seconds in, are beyond current physics."
