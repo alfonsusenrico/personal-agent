@@ -132,6 +132,23 @@ Formatting choices in the paid run (medium):
 - Prompt caching now works: the guide makes the stable prefix longer than the
   provider's minimum (for example 1,474 of 1,670 input tokens cached).
 
+## Live Telegram check (task 6.1, in progress)
+
+Owner's desktop client, real model, 2026-10-13.
+
+- Defect: each reply left a "…" draft bubble beside it until the owner's next
+  message. The placeholder was sent with plain `sendMessageDraft` while the
+  text drafts and the reply used the rich methods, contrary to design §15
+  (`<tg-thinking>`); Telegram documents that a rich draft is finalised by
+  `sendRichMessage`. Fixed in `6b058a5`: every draft, the placeholder
+  included, uses `sendRichMessageDraft`
+  (`test_placeholder_then_changing_text_then_refresh`,
+  `test_empty_draft_is_the_thinking_placeholder_with_stop`). The owner
+  confirmed the bubble now disappears when the reply arrives.
+- First turns: a burst of three messages merged into one turn and one
+  answer; the local time (21.14 WIB) was correct; the formula reply arrived
+  rich with no plain fallback; three replies cost USD 0.000583 in total.
+
 ## Not verified yet
 
 - Task 6.1 on Telegram with the real model needs the owner to send the
