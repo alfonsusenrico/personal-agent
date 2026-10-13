@@ -378,6 +378,13 @@ by an assistant record "[stopped by the owner before the reply was
 finished]", so the next reply knows. The gateway still completes and charges
 the call. A Stop for an old or unknown draft is ignored.
 
+The owner's Telegram Desktop client sent its Stop press as a typed `/stop`
+command (a `bot_command` entity), not as `stopped_message_generation` (live
+check, 2026-10-13). So an owner message that is exactly `/stop` (optionally
+`/stop@botname`) is stored as a `stop` event with no draft ID, which stops
+the conversation's generating turn whatever its draft; it never joins a turn
+or reaches the model. With nothing generating it is recorded and ignored.
+
 ### 17. Images by URL
 
 A media block is kept only if its exact URL appeared in an owner message in

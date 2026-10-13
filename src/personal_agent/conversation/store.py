@@ -219,10 +219,11 @@ async def ingest(
             connection,
             """
             UPDATE turn SET stop_requested_at = %s
-            WHERE conversation_id = %s AND status = 'generating' AND draft_id = %s
+            WHERE conversation_id = %s AND status = 'generating'
+              AND (%s::bigint IS NULL OR draft_id = %s)
             RETURNING id
             """,
-            (now, conversation_id, envelope.draft_id),
+            (now, conversation_id, envelope.draft_id, envelope.draft_id),
         )
         return IngestResult(
             event_id=row["id"],

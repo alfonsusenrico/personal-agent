@@ -4,9 +4,9 @@ steps:
   - send: "give me two quick dinner ideas"
   - settle: true
   - wait: 60
-  - send: "/stop"
+  - send: "/help"
 expect:
   turns: 2
 fake_replies:
   - "Pasta with garlic and olive oil, or fried rice with an egg."
-  - "Okay, I'll stop there."
+  - "I can answer questions, explain things, and help you plan."

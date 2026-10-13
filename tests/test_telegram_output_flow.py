@@ -248,6 +248,36 @@ async def test_stop_discards_the_reply_and_the_next_reply_knows(
     assert agent.server.sent_texts == ["Sure, shorter then."]
 
 
+async def test_a_typed_stop_command_stops_the_reply(
+    agent: Agent[FakeResponses], pool: AsyncConnectionPool, clock: FakeClock
+) -> None:
+    async def owner_types_stop(body: dict[str, Any]) -> None:
+        if len(agent.responses.calls) == 1:
+            await agent.receive(message_update(2, "/stop", date=clock.now))
+
+    agent.responses.on_call = owner_types_stop
+    await agent.receive(message_update(1, "explain the internet in detail", date=clock.now))
+    await agent.settle()
+
+    assert agent.server.sent == []
+    assert len(agent.responses.calls) == 1
+    assert await _rows(pool, "SELECT status FROM turn") == [("stopped",)]
+    assert await _rows(pool, "SELECT text FROM message WHERE role = 'user'") == [
+        ("explain the internet in detail",)
+    ]
+
+
+async def test_a_stop_command_with_nothing_running_is_not_answered(
+    agent: Agent[FakeResponses], pool: AsyncConnectionPool, clock: FakeClock
+) -> None:
+    await agent.receive(message_update(1, "/stop", date=clock.now))
+    await agent.settle()
+
+    assert agent.server.sent == []
+    assert agent.responses.calls == []
+    assert await _rows(pool, "SELECT kind, turn_id FROM inbound_event") == [("stop", None)]
+
+
 async def test_stop_for_another_draft_is_ignored(
     agent: Agent[FakeResponses], clock: FakeClock
 ) -> None:

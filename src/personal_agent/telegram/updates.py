@@ -3,10 +3,14 @@
 Only private-chat messages, button presses, poll votes, and Stop presses from
 allowlisted users become envelopes; anything else is ignored without being stored,
 because a stranger's message is their personal data.
+
+Some Telegram clients send a Stop press as a typed /stop command instead of a
+stopped_message_generation update, so /stop is a Stop press too, never a message.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -33,6 +37,8 @@ _UNREADABLE_CONTENT = (
     "story",
     "paid_media",
 )
+
+_STOP_COMMAND = re.compile(r"/stop(@[A-Za-z0-9_]+)?")
 
 EventKind = Literal["message", "edit", "unsupported", "button", "poll_answer", "stop"]
 Trust = Literal["owner_direct", "owner_forwarded"]
@@ -106,7 +112,7 @@ class Envelope:
     update_id: int
     user_id: int
     chat_id: int
-    # None for poll votes and Stop presses, which carry no message.
+    # None for poll votes and Stop button presses, which carry no message.
     message_id: int | None
     kind: EventKind
     modality: str
@@ -122,6 +128,7 @@ class Envelope:
     button_token: str | None = None
     poll_id: str | None = None
     poll_option_ids: tuple[int, ...] = ()
+    # The stopped draft; None for a /stop command, which stops whatever is generating.
     draft_id: int | None = None
 
 
@@ -154,6 +161,17 @@ def parse_update(
     if message.chat.type != "private" or message.sender.id not in allowed:
         return None
     is_edit = parsed.edited_message is not None
+    if not is_edit and message.text and _STOP_COMMAND.fullmatch(message.text.strip()):
+        return _control_envelope(
+            parsed.update_id,
+            user_id=message.sender.id,
+            kind="stop",
+            now=now,
+            raw=update,
+            message_id=message.message_id,
+            occurred_at=datetime.fromtimestamp(message.date, UTC),
+            text=message.text,
+        )
     modality = _modality(update["edited_message" if is_edit else "message"])
     if is_edit:
         kind: EventKind = "edit"

@@ -127,3 +127,17 @@ def test_poll_vote_and_stop_are_parsed_for_the_owner_only() -> None:
     assert parse_update(stranger_vote, ALLOWED, now=START) is None
     assert parsed_stop is not None
     assert (parsed_stop.kind, parsed_stop.draft_id, parsed_stop.answerable) == ("stop", 77, False)
+
+
+def test_a_stop_command_is_a_stop_press_not_a_message() -> None:
+    command = parse_update(message_update(26, "/stop", message_id=9), ALLOWED, now=START)
+    addressed = parse_update(message_update(27, "/stop@helper_bot"), ALLOWED, now=START)
+    sentence = parse_update(message_update(28, "/stop talking about it"), ALLOWED, now=START)
+    stranger = parse_update(message_update(29, "/stop", user_id=STRANGER_ID), ALLOWED, now=START)
+
+    assert command is not None
+    assert (command.kind, command.draft_id, command.answerable) == ("stop", None, False)
+    assert (command.message_id, command.text) == (9, "/stop")
+    assert addressed is not None and addressed.kind == "stop"
+    assert sentence is not None and sentence.kind == "message"
+    assert stranger is None

@@ -140,12 +140,26 @@ effect SHALL be retried without the effect.
 When the owner presses Stop on the draft of a reply being prepared, the
 assistant SHALL stop preparing it and send nothing for that turn, and SHALL
 record that the owner stopped it. A Stop for any other draft SHALL be ignored.
+A `/stop` command from the owner SHALL count as a Stop press for the reply
+being prepared, because some Telegram clients send it in place of the Stop
+update; it SHALL never be answered as a message.
 
 #### Scenario: Owner stops a long answer
 
 - **WHEN** the owner presses Stop while a reply is streaming
 - **THEN** the draft disappears, no message is sent, and the next reply
   knows the previous one was stopped
+
+#### Scenario: Client sends Stop as a command
+
+- **WHEN** the owner's client sends `/stop` while a reply is streaming
+- **THEN** the reply is stopped as if Stop were pressed, and no reply is
+  written to the command
+
+#### Scenario: Stop with nothing to stop
+
+- **WHEN** the owner sends `/stop` while no reply is being prepared
+- **THEN** it is recorded and nothing is sent
 
 ### Requirement: Flood control is respected
 
