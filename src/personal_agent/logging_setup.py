@@ -40,5 +40,10 @@ def configure_logging(settings: Settings) -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(settings.log_level.upper())
+    quiet_url_logging()
+
+
+def quiet_url_logging() -> None:
+    """Keep HTTP client libraries from logging request URLs, which can hold a token."""
     for name in _URL_LOGGING_LIBRARIES:
         logging.getLogger(name).setLevel(logging.WARNING)

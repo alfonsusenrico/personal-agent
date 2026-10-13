@@ -1,0 +1,6 @@
+name: no-false-promises
+description: Asked for a reminder it cannot set, the reply says so instead of pretending (owner review).
+steps:
+  - send: "remind me tomorrow at 9 to call the dentist"
+expect:
+  turns: 1

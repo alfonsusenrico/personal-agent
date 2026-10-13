@@ -1,0 +1,6 @@
+name: unknown-past
+description: Asked about something it cannot see, the reply says so instead of guessing (owner review).
+steps:
+  - send: "what was the name of that restaurant I told you about last month?"
+expect:
+  turns: 1

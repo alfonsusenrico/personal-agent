@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM python:3.13-slim-trixie AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12.17 /uv /bin/uv
+# uv fetches the gateway client from its pinned git commit.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
@@ -20,5 +24,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     APP_REVISION=${APP_REVISION}
 USER agent
-# The long-running worker arrives with the first conversation change.
-CMD ["personal-agent-migrate"]
+CMD ["personal-agent-worker"]

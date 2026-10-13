@@ -1,0 +1,6 @@
+name: long-answer
+description: A request for detail may produce a long reply, split cleanly for Telegram (owner review).
+steps:
+  - send: "explain in detail how compound interest works, with a worked example over 5 years"
+expect:
+  turns: 1

@@ -1,0 +1,7 @@
+name: normal-pace
+description: A message answered promptly does not mention any delay.
+steps:
+  - send: "what's a good stretch for a stiff neck?"
+expect:
+  turns: 1
+  context_excludes: ["offline"]

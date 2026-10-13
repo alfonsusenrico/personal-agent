@@ -39,5 +39,30 @@ services:
         condition: service_healthy
     restart: "no"
 
+  worker:
+    image: personal-agent:${APP_REVISION:-local}
+    command: ["personal-agent-worker"]
+    environment:
+      <<: *agent-environment
+      APP_REVISION: ${APP_REVISION:-local}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN in .env}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:?Set TELEGRAM_ALLOWED_USER_IDS in .env}
+      # The gateway runs in its own compose project on the host's loopback port.
+      GATEWAY_URL: ${WORKER_GATEWAY_URL:-http://host.docker.internal:8360}
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY in .env}
+      REPLY_PROFILE: ${REPLY_PROFILE:-reply}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Asia/Jakarta}
+      TURN_DEBOUNCE_SECONDS: ${TURN_DEBOUNCE_SECONDS:-2}
+      RECENT_WINDOW_TOKENS: ${RECENT_WINDOW_TOKENS:-6000}
+      OFFLINE_NOTICE_AFTER_SECONDS: ${OFFLINE_NOTICE_AFTER_SECONDS:-300}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   db-data:

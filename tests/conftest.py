@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import os
 import uuid
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 
 import psycopg
 import pytest
 from psycopg import sql
+from psycopg_pool import AsyncConnectionPool
 
+from personal_agent.db.migrate import MIGRATIONS_DIR, apply_migrations, discover
 from personal_agent.settings import Settings
 
 # Nothing listens on port 1, so a connection fails immediately.
@@ -51,3 +53,33 @@ def isolated_schema(test_database_url: str) -> Iterator[str]:
     finally:
         with psycopg.connect(test_database_url, autocommit=True) as connection:
             connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest.fixture
+def migrated_schema(test_database_url: str, isolated_schema: str) -> str:
+    """An isolated schema with every packaged migration applied."""
+    with psycopg.connect(test_database_url, options=f"-c search_path={isolated_schema}") as conn:
+        apply_migrations(conn, discover(MIGRATIONS_DIR))
+    return isolated_schema
+
+
+@pytest.fixture
+async def pool(test_database_url: str, migrated_schema: str) -> AsyncIterator[AsyncConnectionPool]:
+    pool = AsyncConnectionPool(
+        test_database_url,
+        connection_class=psycopg.AsyncConnection,
+        min_size=1,
+        max_size=4,
+        kwargs={"options": f"-c search_path={migrated_schema}"},
+        open=False,
+    )
+    await pool.open(wait=True)
+    try:
+        yield pool
+    finally:
+        await pool.close()

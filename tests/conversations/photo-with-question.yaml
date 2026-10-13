@@ -1,0 +1,10 @@
+name: photo-with-question
+description: A photo with a caption question is answered from the caption, saying the photo can't be seen.
+steps:
+  - media:
+      kind: photo
+      caption: "is this mushroom safe to eat? it's white with a ring on the stem"
+expect:
+  turns: 1
+  user_contains: ["[photo] is this mushroom safe to eat?"]
+  context_contains: ["(photo)"]

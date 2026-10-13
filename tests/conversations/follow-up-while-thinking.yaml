@@ -1,0 +1,12 @@
+name: follow-up-while-thinking
+description: A follow-up sent while the reply is prepared joins the turn; one reply is sent.
+steps:
+  - send: "can you suggest a quick dinner?"
+  - while_thinking:
+      send: "something without rice please"
+expect:
+  turns: 1
+  model_calls: 2
+  superseded_calls: 1
+  merged_sources: [2]
+  user_contains: ["can you suggest a quick dinner?\nsomething without rice please"]

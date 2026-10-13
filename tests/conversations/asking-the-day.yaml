@@ -1,0 +1,7 @@
+name: asking-the-day
+description: Asked the date, the reply uses the context note, not a guess.
+steps:
+  - send: "what's the date today, and how many days until the end of the month?"
+expect:
+  turns: 1
+  context_contains: ["Current time for the owner:"]

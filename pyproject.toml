@@ -10,12 +10,15 @@ authors = [
 ]
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "httpx2>=2.13.1,<3",
+    "llm-gateway-client",
     "psycopg[binary,pool]>=3.3.6",
     "pydantic-settings>=2.15.0",
 ]
 
 [project.scripts]
 personal-agent-migrate = "personal_agent.db.migrate:main"
+personal-agent-worker = "personal_agent.worker:main"
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
@@ -23,8 +26,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "anyio>=4.15.1",
     "pyright[nodejs]>=1.1.414",
     "pytest>=9.1.1",
+    "pyyaml>=6.0.3",
     "ruff>=0.17.0",
 ]
 
@@ -53,3 +58,6 @@ xfail_strict = true
 markers = [
     "db: needs the disposable Postgres database; fails instead of skipping when REQUIRE_DB=1",
 ]
+
+[tool.uv.sources]
+llm-gateway-client = { git = "https://github.com/alfonsusenrico/llm-gateway.git", subdirectory = "clients/python", rev = "505f6e10207aff4efdec64648421c4e5548f270e" }

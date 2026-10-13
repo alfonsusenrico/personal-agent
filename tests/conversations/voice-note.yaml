@@ -1,0 +1,9 @@
+name: voice-note
+description: A voice note alone gets an honest "can't listen yet" reply.
+steps:
+  - media:
+      kind: voice
+expect:
+  turns: 1
+  user_contains: ["[voice note]"]
+  context_contains: ["cannot open yet (voice note)"]

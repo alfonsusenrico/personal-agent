@@ -1,0 +1,9 @@
+name: language-switch
+description: The reply follows the language of the latest message when the owner switches (owner review).
+steps:
+  - send: "What's a simple breakfast with eggs?"
+  - settle: true
+  - wait: 120
+  - send: "Kalau tanpa telur, apa ya?"
+expect:
+  turns: 2

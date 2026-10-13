@@ -1,0 +1,13 @@
+name: burst-merge
+description: Three quick messages are answered as one turn.
+steps:
+  - send: "hey"
+  - wait: 1
+  - send: "quick question"
+  - wait: 1
+  - send: "is it a bad idea to repot a plant in the evening?"
+expect:
+  turns: 1
+  model_calls: 1
+  merged_sources: [3]
+  user_contains: ["hey\nquick question\nis it a bad idea"]
