@@ -1,16 +1,19 @@
 """Model calls through llm-gateway: stable call IDs, bounded retries, content-free records.
 
 Call IDs are `pa:{call_key}:{purpose}:{generation}:a{attempt}`, where the call key is
-the turn's random UUID: stable across restarts, never reused by another database. Resubmitting an ID
-replays a finished call for free, so a restart rebuilds the same request and sends
-the same ID. The attempt rises only when the earlier ID cannot be used again: its
-outcome is unknown, its stored result expired, or the rebuilt request differs.
+the turn's random UUID: stable across restarts, never reused by another database.
+Resubmitting an ID replays a finished call for free, so a restart rebuilds the same
+request and sends the same ID. The attempt rises only when the earlier ID cannot be
+used again: its outcome is unknown, its stored result expired, or the rebuilt request
+differs. Calls are streamed, so the text so far can be shown while it is written.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -19,8 +22,11 @@ from typing import Any, Literal, Protocol
 from llm_gateway_client import (
     BudgetExhaustedError,
     CallResult,
+    Completed,
     ExecutionUnknownError,
     GatewayError,
+    StreamEvent,
+    TextDelta,
 )
 from psycopg_pool import AsyncConnectionPool
 
@@ -35,6 +41,7 @@ logger = logging.getLogger(__name__)
 CallStatus = Literal[
     "completed",
     "incomplete",
+    "stopped",
     "execution_unknown",
     "replay_conflict",
     "budget_exhausted",
@@ -43,7 +50,7 @@ CallStatus = Literal[
 
 
 class Responses(Protocol):
-    async def create(
+    def stream(
         self,
         *,
         provider_call_id: str,
@@ -54,7 +61,11 @@ class Responses(Protocol):
         max_output_tokens: int | None = None,
         reasoning_effort: str | None = None,
         prompt_cache_key: str | None = None,
-    ) -> CallResult: ...
+    ) -> AsyncIterator[StreamEvent]: ...
+
+
+class StreamEndedError(GatewayError):
+    """The stream finished without its final event."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,24 +173,32 @@ async def run_call(
     request: CallRequest,
     *,
     clock: Clock,
+    on_text: Callable[[str], None] | None = None,
 ) -> CallOutcome:
-    """Run one model call to an answer, a budget notice, or a failure."""
+    """Run one model call to an answer, a budget notice, or a failure.
+
+    `on_text` receives the text written so far while the call streams. Cancelling
+    the task records the call as stopped; the gateway still finishes and settles it.
+    """
     attempt = 1 + await _unusable_attempts(pool, request)
     last_row: int | None = None
     while attempt <= MAX_ATTEMPTS:
         identifier = call_id(request.call_key, request.purpose, request.generation, attempt)
         started = time.monotonic()
         try:
-            result = await responses.create(
-                provider_call_id=identifier,
-                operation=request.purpose,
-                input=request.input,
-                profile=request.profile,
-                instructions=request.instructions,
-                max_output_tokens=request.max_output_tokens,
-                reasoning_effort=request.reasoning_effort,
-                prompt_cache_key=request.prompt_cache_key,
+            result = await _stream(responses, request, identifier, on_text)
+        except asyncio.CancelledError:
+            await _record(
+                pool,
+                request,
+                attempt=attempt,
+                status="stopped",
+                latency_ms=_elapsed_ms(started),
+                now=clock(),
+                error_code="stopped",
             )
+            logger.info("Call %s stopped", identifier)
+            raise
         except ExecutionUnknownError:
             last_row = await _record(
                 pool,
@@ -253,6 +272,33 @@ async def run_call(
             return CallOutcome("failed", None, last_row, "empty_output")
         return CallOutcome("answered", text, last_row)
     return CallOutcome("failed", None, last_row, "attempts_exhausted")
+
+
+async def _stream(
+    responses: Responses,
+    request: CallRequest,
+    identifier: str,
+    on_text: Callable[[str], None] | None,
+) -> CallResult:
+    written = ""
+    async for event in responses.stream(
+        provider_call_id=identifier,
+        operation=request.purpose,
+        input=request.input,
+        profile=request.profile,
+        instructions=request.instructions,
+        max_output_tokens=request.max_output_tokens,
+        reasoning_effort=request.reasoning_effort,
+        prompt_cache_key=request.prompt_cache_key,
+    ):
+        if isinstance(event, TextDelta):
+            written += event.delta
+            if on_text is not None:
+                on_text(written)
+        elif isinstance(event, Completed):
+            # After a resubmission the final text is the authoritative one.
+            return event.result
+    raise StreamEndedError("stream_ended")
 
 
 def _elapsed_ms(started: float) -> int:

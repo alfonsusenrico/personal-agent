@@ -72,31 +72,31 @@ Expected Result: the assistant runs locally end to end on the stub.
 
 ## 5. Telegram output
 
-- [ ] 5.1 Add the Telegram guide (`conversation/channels/telegram.md`) to the
+- [x] 5.1 Add the Telegram guide (`conversation/channels/telegram.md`) to the
   instructions and move formatting rules out of the persona. Verify with
   context tests: the instructions hold the persona and the guide, with no
   date.
-- [ ] 5.2 Add migration `0003` (event kinds, turn `stopped` and `draft_id`,
+- [x] 5.2 Add migration `0003` (event kinds, turn `stopped` and `draft_id`,
   model-call `stopped`, outbox kind and payload, `reply_button`,
   `reply_poll`). Verify with migration and constraint tests.
-- [ ] 5.3 Add reply rendering: directive parsing (reaction, effect, poll),
+- [x] 5.3 Add reply rendering: directive parsing (reaction, effect, poll),
   button filtering and token rewriting, media URL filtering, rich limits and
   splitting, and the plain-text conversion for fallback. Verify with unit
   tests for each rule, including invalid directives and invented URLs.
-- [ ] 5.4 Extend the Bot API client (`sendRichMessage`,
+- [x] 5.4 Extend the Bot API client (`sendRichMessage`,
   `sendRichMessageDraft`, `editMessageText`, `answerCallbackQuery`,
   `setMessageReaction`, `sendPoll`) and the sender (kinds, plain fallback,
   effect retry). Verify with mocked-transport tests: rich body shape, 400
   then plain fallback, effect rejected then retried without it.
-- [ ] 5.5 Accept `callback_query`, `poll_answer`, and
+- [x] 5.5 Accept `callback_query`, `poll_answer`, and
   `stopped_message_generation`: allowlist, button and poll events that join
   turns, the "✓ label" edit, used-token notice, and Stop. Verify with flow
   tests for each spec scenario.
-- [ ] 5.6 Stream generations through the gateway with drafts (placeholder,
+- [x] 5.6 Stream generations through the gateway with drafts (placeholder,
   pacing, refresh, hidden markup, new draft on regeneration, Stop
   cancellation). Verify with flow tests using a streaming fake gateway and a
   controllable clock, and the gateway contract test on the stub.
-- [ ] 5.7 Update the conversation scripts with formatting, buttons, poll,
+- [x] 5.7 Update the conversation scripts with formatting, buttons, poll,
   reaction, and Stop cases; update `README.md` and `AGENTS.md`. Verify with
   a free stub run.
 
@@ -120,7 +120,7 @@ the gateway stub.
 - [x] 6.2 Run the synthetic scripts on the `reply` profile at low and medium
   effort (owner-authorised, under USD 0.50), compare quality and cost for the
   owner, and record the chosen default. Done on the plain-text version.
-- [ ] 6.3 Rerun 6.2 with the Telegram guide (under USD 0.50) and compare
+- [x] 6.3 Rerun 6.2 with the Telegram guide (under USD 0.50) and compare
   formatting choices (plain for chat, structure only when it helps).
 
 ## Workflow follow-up

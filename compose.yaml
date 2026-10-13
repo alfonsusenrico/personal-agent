@@ -55,6 +55,7 @@ services:
       TURN_DEBOUNCE_SECONDS: ${TURN_DEBOUNCE_SECONDS:-2}
       RECENT_WINDOW_TOKENS: ${RECENT_WINDOW_TOKENS:-6000}
       OFFLINE_NOTICE_AFTER_SECONDS: ${OFFLINE_NOTICE_AFTER_SECONDS:-300}
+      DRAFT_INTERVAL_SECONDS: ${DRAFT_INTERVAL_SECONDS:-1}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

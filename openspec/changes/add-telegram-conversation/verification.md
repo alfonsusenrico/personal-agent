@@ -1,8 +1,7 @@
 # Verification: add-telegram-conversation
 
-Status: the plain-text version below is verified. On 2026-10-13 the owner
-folded Telegram's full output features into this change (tasks 5.1-5.7);
-their verification is added when they are implemented.
+Status: the plain-text version and the Telegram output (tasks 5.1-5.7, 6.3)
+are verified locally. The live Telegram check with the owner (6.1) is pending.
 
 Branch `feat/telegram-conversation`, working tree on top of `main` at
 `7ef1199`, 2026-10-13. Local only: macOS host, Docker Compose, Postgres 16
@@ -88,10 +87,57 @@ Same 16 scripts, 19 calls each, gpt-6-luna through the `reply` profile:
   minimum. Real conversations with a recent window exceed it.
 - Default: **medium**, confirmed by the owner on 2026-10-13.
 
+## Telegram output (tasks 5.1-5.7, 6.3)
+
+| Check | Command | Result |
+|---|---|---|
+| Gate | `./scripts/check` | 139 passed; pyright 0 errors; OpenSpec strict valid |
+| Migration `0003` | `docker compose up --build migrate` | applied to the local database |
+| Worker | `REPLY_PROFILE=reply_stub docker compose up -d --build worker` | started; a full 30 s long poll with the new `allowed_updates` raised no error |
+| Gateway contract (stream) | `tests/test_gateway_contract.py` on the stub | deltas then the final result; a resubmission replays one final event; a changed body gives `idempotency_conflict` |
+| Scripts, free | `./scripts/converse` (25 scripts; the stub answers with each script's `fake_replies`) | 25 ok, USD 0 |
+| Scripts, paid | `./scripts/converse --profile reply --paid` (medium) | 25 ok, USD 0.006951 |
+
+Spec coverage (`tests/test_telegram_output_flow.py`, `test_rich.py`,
+`test_drafts.py`, `test_telegram_api.py`, `test_updates.py`):
+draft then rich message; plain fallback once on rejection; effect sent, and
+retried without it when rejected; reaction-only reply; only shared media
+kept; quick-reply press answered, redrawn with "✓ label", second press
+refused with a notice; poll after the message, vote answered, retracted vote
+ignored; Stop discards the reply and the next reply sees the record; a Stop
+for another draft is ignored; a Stop stored before a restart closes the turn
+without a model call; a regeneration opens a new draft.
+
+Defects found and fixed while testing:
+
+- Parsing: removing unknown `pa-` tags also removed the valid directives;
+  `<tg-button` matched `<tg-button-row>` and swallowed the first button; the
+  draft view showed a half-written poll. Found by `test_rich.py`.
+- Paid run: after a quick-reply press the model answered with only a
+  reaction, which needs a typed message, so nothing visible was sent. The
+  context note now asks for words after a press or vote, and a reaction with
+  no target is sent as the emoji itself (regression test
+  `test_a_reaction_to_a_button_press_arrives_as_the_emoji`). Rerun: "Sushi it
+  is 🍣" (USD 0.000309).
+
+Formatting choices in the paid run (medium):
+
+- Casual chat stayed plain text; the comparison came as a table; the long
+  answer used a block formula, a heading, and a year-by-year table.
+- "thanks, got it" got only 👍; the poll request got a native poll and the
+  vote an answer; the button request got three quick replies.
+- No image URL was invented; the shared one was shown again.
+- The celebration got an emoji, not a message effect (the model's choice).
+- The mixed-language message was still answered in Indonesian only.
+- Prompt caching now works: the guide makes the stable prefix longer than the
+  provider's minimum (for example 1,474 of 1,670 input tokens cached).
+
 ## Not verified yet
 
 - Task 6.1 on Telegram with the real model needs the owner to send the
-  messages: burst, mid-turn follow-up, edits, voice note and photo, a
+  messages. It also verifies what fakes cannot: rich-message rendering on
+  the owner's phone and desktop, the six effect IDs, drafts and Stop, and
+  button and poll round trips. The plain-text part: burst, mid-turn follow-up, edits, voice note and photo, a
   forward, a restart while a reply is pending, an offline period, and
   English, Indonesian, and mixed messages. Its results, per-turn cost, and a
   log scan will be added here.

@@ -21,9 +21,9 @@ from personal_agent.db.pool import create_pool
 from personal_agent.logging_setup import configure_logging
 from personal_agent.settings import SettingsError, WorkerSettings, load_worker_settings
 from personal_agent.telegram.api import TelegramApi, TelegramError
+from personal_agent.telegram.drafts import Drafts
 from personal_agent.telegram.poller import Poller
 from personal_agent.telegram.sender import Sender
-from personal_agent.telegram.typing import TypingIndicator
 
 # An arbitrary constant owned by this module; the migration runner uses another.
 WORKER_LOCK_KEY = 7_402_120_002
@@ -77,14 +77,6 @@ async def run(settings: WorkerSettings) -> int:
             return EXIT_CONFIG
         turn_wakeup = asyncio.Event()
         outbox_wakeup = asyncio.Event()
-        poller = Poller(
-            pool,
-            telegram,
-            allowed_user_ids=settings.telegram_allowed_user_ids,
-            default_timezone=settings.default_timezone,
-            clock=utc_now,
-            on_stored=turn_wakeup.set,
-        )
         runner = TurnRunner(
             pool,
             gateway.responses,
@@ -96,8 +88,17 @@ async def run(settings: WorkerSettings) -> int:
                 offline_after=timedelta(seconds=settings.offline_notice_after_seconds),
             ),
             clock=utc_now,
-            typing=TypingIndicator(telegram),
+            drafts=Drafts(telegram, interval_seconds=settings.draft_interval_seconds),
             on_answer=outbox_wakeup.set,
+        )
+        poller = Poller(
+            pool,
+            telegram,
+            allowed_user_ids=settings.telegram_allowed_user_ids,
+            default_timezone=settings.default_timezone,
+            clock=utc_now,
+            on_stored=turn_wakeup.set,
+            on_stop=runner.request_stop,
         )
         sender = Sender(pool, telegram, clock=utc_now)
         stop = asyncio.Event()

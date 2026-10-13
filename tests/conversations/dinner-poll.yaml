@@ -1,0 +1,13 @@
+name: dinner-poll
+description: Asked for a poll, the assistant sends a native poll and answers the vote.
+steps:
+  - send: "make me a poll for Friday dinner: pizza, sushi, or tacos"
+  - vote: ["sushi"]
+expect:
+  turns: 2
+  user_contains: ["[poll vote]"]
+fake_replies:
+  - "Here you go.\n<pa-poll question=\"Friday dinner?\" multiple=\"false\"><option>Pizza</option><option>Sushi</option><option>Tacos</option></pa-poll>"
+  - "Sushi it is."
+expect_fake:
+  sent_methods: [sendRichMessage, sendPoll, sendRichMessage]

@@ -1,7 +1,8 @@
 """Map Telegram updates to the channel-neutral inbound envelope.
 
-Only private-chat messages from allowlisted users become envelopes; anything else is
-ignored without being stored, because a stranger's message is their personal data.
+Only private-chat messages, button presses, poll votes, and Stop presses from
+allowlisted users become envelopes; anything else is ignored without being stored,
+because a stranger's message is their personal data.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ _UNREADABLE_CONTENT = (
     "paid_media",
 )
 
-EventKind = Literal["message", "edit", "unsupported"]
+EventKind = Literal["message", "edit", "unsupported", "button", "poll_answer", "stop"]
 Trust = Literal["owner_direct", "owner_forwarded"]
 
 
@@ -68,10 +69,36 @@ class _Message(_Lenient):
     reply_to_message: _RepliedMessage | None = None
 
 
+class _CallbackMessage(_Lenient):
+    message_id: int
+    chat: _Chat
+
+
+class _CallbackQuery(_Lenient):
+    id: str
+    sender: _User = Field(alias="from")
+    message: _CallbackMessage | None = None
+    data: str | None = None
+
+
+class _PollAnswer(_Lenient):
+    poll_id: str
+    user: _User | None = None
+    option_ids: list[int]
+
+
+class _GenerationStopped(_Lenient):
+    chat: _Chat
+    draft_id: int
+
+
 class _Update(_Lenient):
     update_id: int
     message: _Message | None = None
     edited_message: _Message | None = None
+    callback_query: _CallbackQuery | None = None
+    poll_answer: _PollAnswer | None = None
+    stopped_message_generation: _GenerationStopped | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +106,8 @@ class Envelope:
     update_id: int
     user_id: int
     chat_id: int
-    message_id: int
+    # None for poll votes and Stop presses, which carry no message.
+    message_id: int | None
     kind: EventKind
     modality: str
     occurred_at: datetime
@@ -90,6 +118,11 @@ class Envelope:
     raw: dict[str, Any]
     # False for service messages (a pin, for example), which are logged but not answered.
     answerable: bool
+    callback_query_id: str | None = None
+    button_token: str | None = None
+    poll_id: str | None = None
+    poll_option_ids: tuple[int, ...] = ()
+    draft_id: int | None = None
 
 
 def update_id_of(update: dict[str, Any]) -> int | None:
@@ -97,16 +130,28 @@ def update_id_of(update: dict[str, Any]) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def parse_update(update: dict[str, Any], allowed_user_ids: Iterable[int]) -> Envelope | None:
-    """The envelope for an allowlisted private message, or None when it must be ignored."""
+def parse_update(
+    update: dict[str, Any], allowed_user_ids: Iterable[int], *, now: datetime
+) -> Envelope | None:
+    """The envelope for an allowlisted private update, or None when it must be ignored.
+
+    `now` dates button presses, votes, and Stop presses, which Telegram does not date.
+    """
     try:
         parsed = _Update.model_validate(update)
     except ValidationError:
         return None
+    allowed = set(allowed_user_ids)
+    if parsed.callback_query is not None:
+        return _button_press(parsed.update_id, parsed.callback_query, allowed, now, update)
+    if parsed.poll_answer is not None:
+        return _poll_vote(parsed.update_id, parsed.poll_answer, allowed, now, update)
+    if parsed.stopped_message_generation is not None:
+        return _stop(parsed.update_id, parsed.stopped_message_generation, allowed, now, update)
     message = parsed.message or parsed.edited_message
     if message is None or message.sender is None or message.sender.is_bot:
         return None
-    if message.chat.type != "private" or message.sender.id not in set(allowed_user_ids):
+    if message.chat.type != "private" or message.sender.id not in allowed:
         return None
     is_edit = parsed.edited_message is not None
     modality = _modality(update["edited_message" if is_edit else "message"])
@@ -143,3 +188,83 @@ def _modality(message: dict[str, Any]) -> str:
         if message.get(key) is not None:
             return key
     return "service"
+
+
+def _control_envelope(
+    update_id: int,
+    *,
+    user_id: int,
+    kind: EventKind,
+    now: datetime,
+    raw: dict[str, Any],
+    **fields: Any,
+) -> Envelope:
+    values: dict[str, Any] = {
+        "update_id": update_id,
+        "user_id": user_id,
+        "chat_id": user_id,
+        "message_id": None,
+        "kind": kind,
+        "modality": kind,
+        "occurred_at": now,
+        "trust": "owner_direct",
+        "forward_origin": None,
+        "reply_to_message_id": None,
+        "text": None,
+        "raw": raw,
+        "answerable": kind != "stop",
+    }
+    values.update(fields)
+    return Envelope(**values)
+
+
+def _button_press(
+    update_id: int, query: _CallbackQuery, allowed: set[int], now: datetime, raw: dict[str, Any]
+) -> Envelope | None:
+    if query.sender.is_bot or query.sender.id not in allowed or query.message is None:
+        return None
+    if query.message.chat.type != "private" or not query.data:
+        return None
+    return _control_envelope(
+        update_id,
+        user_id=query.sender.id,
+        kind="button",
+        now=now,
+        raw=raw,
+        chat_id=query.message.chat.id,
+        message_id=query.message.message_id,
+        callback_query_id=query.id,
+        button_token=query.data,
+    )
+
+
+def _poll_vote(
+    update_id: int, answer: _PollAnswer, allowed: set[int], now: datetime, raw: dict[str, Any]
+) -> Envelope | None:
+    # A vote without a user came from an anonymous voter; the assistant's polls are not.
+    if answer.user is None or answer.user.id not in allowed:
+        return None
+    return _control_envelope(
+        update_id,
+        user_id=answer.user.id,
+        kind="poll_answer",
+        now=now,
+        raw=raw,
+        poll_id=answer.poll_id,
+        poll_option_ids=tuple(answer.option_ids),
+    )
+
+
+def _stop(
+    update_id: int,
+    stopped: _GenerationStopped,
+    allowed: set[int],
+    now: datetime,
+    raw: dict[str, Any],
+) -> Envelope | None:
+    # In a private chat the chat ID is the user's ID.
+    if stopped.chat.type != "private" or stopped.chat.id not in allowed:
+        return None
+    return _control_envelope(
+        update_id, user_id=stopped.chat.id, kind="stop", now=now, raw=raw, draft_id=stopped.draft_id
+    )

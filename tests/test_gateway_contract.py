@@ -9,9 +9,10 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import timedelta
+from typing import Any
 
 import pytest
-from llm_gateway_client import GatewayClient, InvalidRequestError
+from llm_gateway_client import Completed, GatewayClient, InvalidRequestError, TextDelta
 
 from personal_agent.conversation.context import build_reply_request
 from personal_agent.conversation.models import GenerationPlan, MessageRow, TurnInput
@@ -27,7 +28,7 @@ pytestmark = [
 ]
 
 
-async def test_reply_request_is_accepted_replayed_and_guarded() -> None:
+async def test_reply_stream_is_accepted_replayed_and_guarded() -> None:
     plan = GenerationPlan(1, "contract", 1, 1, 1, START, 2)
     window = [
         MessageRow(1, "user", "earlier", START - timedelta(hours=1), "Asia/Jakarta"),
@@ -42,7 +43,7 @@ async def test_reply_request_is_accepted_replayed_and_guarded() -> None:
     async with GatewayClient(
         os.environ["GATEWAY_TEST_URL"], os.environ["GATEWAY_TEST_API_KEY"]
     ) as gateway:
-        arguments = {
+        arguments: dict[str, Any] = {
             "provider_call_id": call_id,
             "operation": "reply",
             "input": request.input,
@@ -51,13 +52,17 @@ async def test_reply_request_is_accepted_replayed_and_guarded() -> None:
             "max_output_tokens": 2_000,
             "prompt_cache_key": request.prompt_cache_key,
         }
-        first = await gateway.responses.create(**arguments)
-        again = await gateway.responses.create(**arguments)
+        first = [event async for event in gateway.responses.stream(**arguments)]
+        again = [event async for event in gateway.responses.stream(**arguments)]
         changed = {**arguments, "input": [*request.input, {"role": "user", "content": "x"}]}
         with pytest.raises(InvalidRequestError) as conflict:
-            await gateway.responses.create(**changed)
+            _ = [event async for event in gateway.responses.stream(**changed)]
 
-    assert first.status == "completed"
-    assert (first.output_text or "").startswith("stub:")
-    assert again.replayed and again.output_text == first.output_text
+    streamed = "".join(event.delta for event in first if isinstance(event, TextDelta))
+    final = first[-1]
+    assert isinstance(final, Completed) and final.result.status == "completed"
+    assert streamed == final.result.output_text and streamed.startswith("stub:")
+    # A resubmission replays the stored answer as one final event.
+    assert len(again) == 1 and isinstance(again[0], Completed) and again[0].result.replayed
+    assert again[0].result.output_text == final.result.output_text
     assert conflict.value.code == "idempotency_conflict"

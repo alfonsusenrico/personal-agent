@@ -1,0 +1,10 @@
+name: casual-greeting
+description: Everyday chat gets short plain text, no headings or lists (owner review).
+steps:
+  - send: "good morning! slept badly but coffee is helping"
+fake_replies:
+  - "Morning! Glad the coffee's doing its job. Rough night?"
+expect:
+  turns: 1
+expect_fake:
+  sent_methods: [sendRichMessage]

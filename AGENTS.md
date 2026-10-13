@@ -51,13 +51,16 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
 - `src/personal_agent/worker.py`: the worker process (advisory lock, startup
   checks, poller, turn runner, sender).
 - `src/personal_agent/telegram/`: Bot API client (`api.py`), update
-  envelope and allowlist (`updates.py`), store-then-confirm poller, outbox
-  sender, typing indicator, and reply splitting (`render.py`).
+  envelope and allowlist (`updates.py`), store-then-confirm poller (button
+  presses, votes, Stop), outbox sender with plain-text fallback, streamed
+  drafts (`drafts.py`), reply rendering (`rich.py`: directives, buttons,
+  media rule, draft view), and splitting (`render.py`).
 - `src/personal_agent/conversation/`:
   - `store.py`: all conversation SQL (ingest, turns, answers, outbox).
   - `runner.py`: one generation at a time, debounce, regeneration, commit.
-  - `context.py` and `persona.md`: the reply call layout (persona, window,
-    per-turn context note, the owner's turn).
+  - `context.py`, `persona.md`, and `channels/telegram.md`: the reply call
+    layout (persona and platform guide, window, per-turn context note, the
+    owner's turn).
   - `notices.py`: fixed bilingual apology and budget notice.
 - `src/personal_agent/gateway/calls.py`: call IDs
   (`pa:{turn.call_key}:{purpose}:{generation}:a{attempt}`), retries after
@@ -83,6 +86,10 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   cost real money: only run them for tasks the owner authorised.
 - Every record carries `person_id`, so other people can be added later
   without a data migration.
+- The model writes each platform's own format from that platform's guide
+  (`conversation/channels/`); a new platform gets its complete guide and
+  renderer when it is added, never a plain-text interim (owner, 2026-10-13).
+  Directives the agent performs itself use the `pa-` prefix.
 - Put the current date, time, and timezone in a per-turn context message on
   every turn; the model does not know them. Never put them in the
   instructions: a changing prefix defeats prompt caching.

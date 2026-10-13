@@ -1,0 +1,16 @@
+name: stop-mid-reply
+description: The owner presses Stop while a long reply streams; nothing is sent, and the next reply knows.
+steps:
+  - send: "write me a long story about a lighthouse keeper"
+  - stop_while_thinking: true
+  - settle: true
+  - wait: 20
+  - send: "never mind, just one sentence please"
+expect:
+  turns: 2
+  turn_statuses: [stopped, answered]
+fake_replies:
+  - "Once upon a time, a lighthouse keeper..."
+  - "A lonely keeper kept the light burning until the ship he waited for came home."
+expect_fake:
+  sent_methods: [sendRichMessage]

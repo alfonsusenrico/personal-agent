@@ -5,12 +5,18 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from datetime import timedelta
 from typing import Any
 
 import psycopg
 import pytest
-from llm_gateway_client import BudgetExhaustedError, CallResult, ExecutionUnknownError
+from llm_gateway_client import (
+    BudgetExhaustedError,
+    Completed,
+    ExecutionUnknownError,
+    StreamEvent,
+)
 from psycopg import sql
 from psycopg_pool import AsyncConnectionPool
 
@@ -18,6 +24,7 @@ from personal_agent.conversation import notices
 from personal_agent.db.migrate import MIGRATIONS_DIR, apply_migrations, discover
 from personal_agent.logging_setup import quiet_url_logging
 from personal_agent.telegram import poller as poller_module
+from personal_agent.telegram.rich import RICH_MAX_CHARS
 from tests.fakes import (
     BOT_TOKEN,
     START,
@@ -180,15 +187,21 @@ async def test_restart_after_reply_prepared_sends_without_a_new_call(
     assert len(responses.calls) == 1
 
 
+class _WorkerStopped(Exception):
+    """Stands in for the process dying; asyncio treats SystemExit specially in tasks."""
+
+
 class _StopsAfterGatewayFinished:
     """The worker stops after the gateway finished a call, before the result is used."""
 
     def __init__(self, inner: FakeResponses) -> None:
         self._inner = inner
 
-    async def create(self, **kwargs: Any) -> CallResult:
-        await self._inner.create(**kwargs)
-        raise SystemExit("worker stopped")
+    async def stream(self, **kwargs: Any) -> AsyncIterator[StreamEvent]:
+        async for event in self._inner.stream(**kwargs):
+            if isinstance(event, Completed):
+                raise _WorkerStopped
+            yield event
 
 
 async def test_restart_mid_generation_replays_the_same_call(
@@ -200,7 +213,7 @@ async def test_restart_mid_generation_replays_the_same_call(
     stopping = Agent(pool, server, responses, clock, gateway=_StopsAfterGatewayFinished(responses))
     await stopping.receive(message_update(1, "what's up", date=clock.now))
     clock.advance(3)
-    with pytest.raises(SystemExit):
+    with pytest.raises(_WorkerStopped):
         await stopping.runner.step()
     # Time passes before the restart; the rebuilt call must still be identical.
     clock.advance(600)
@@ -465,7 +478,7 @@ async def test_model_calls_record_tokens_and_cost_without_content(
 
 
 async def test_flood_control_waits_and_sends_once(agent: Agent, clock: FakeClock) -> None:
-    agent.server.send_failures = [rate_limited(3)]
+    agent.server.failures["sendRichMessage"] = [rate_limited(3)]
     await agent.receive(message_update(1, "hi", date=clock.now))
     await agent.settle()
 
@@ -473,17 +486,31 @@ async def test_flood_control_waits_and_sends_once(agent: Agent, clock: FakeClock
     assert agent.server.sent_texts == ["Okay."]
 
 
-async def test_long_reply_arrives_in_ordered_chunks(agent: Agent, clock: FakeClock) -> None:
-    paragraphs = [f"Paragraph {index}. " + "word " * 280 for index in range(4)]
+async def test_six_thousand_characters_arrive_as_one_rich_message(
+    agent: Agent, clock: FakeClock
+) -> None:
+    agent.responses.default_reply = "\n\n".join(
+        f"Paragraph {index}. " + "word " * 280 for index in range(5)
+    )
+    await agent.receive(message_update(1, "tell me everything", date=clock.now))
+    await agent.settle()
+
+    assert [item["method"] for item in agent.server.sent] == ["sendRichMessage"]
+    assert len(agent.server.sent_texts[0]) > 6_000
+
+
+async def test_reply_beyond_the_rich_limit_arrives_in_ordered_chunks(
+    agent: Agent, clock: FakeClock
+) -> None:
+    paragraphs = [f"Paragraph {index}. " + "word " * 1_500 for index in range(5)]
     agent.responses.default_reply = "\n\n".join(paragraphs)
     await agent.receive(message_update(1, "tell me everything", date=clock.now))
     await agent.settle()
 
-    assert len(agent.server.sent) >= 2
-    assert all(len(text) <= 4000 for text in agent.server.sent_texts)
-    assert "".join(agent.server.sent_texts).replace("\n", "").replace(
-        " ", ""
-    ) == agent.responses.default_reply.replace("\n", "").replace(" ", "")
+    texts = agent.server.sent_texts
+    assert len(texts) >= 2
+    assert all(len(text) <= RICH_MAX_CHARS for text in texts)
+    assert "\n\n".join(texts) == "\n\n".join(paragraph.strip() for paragraph in paragraphs)
 
 
 async def test_reply_references_an_older_message_only_when_the_owner_moved_on(
@@ -513,7 +540,7 @@ async def test_logs_hold_no_message_text_or_token(
         ExecutionUnknownError("execution_unknown", status=502),
         "a private reply",
     ]
-    agent.server.send_failures = [rate_limited(1)]
+    agent.server.failures["sendRichMessage"] = [rate_limited(1)]
     await agent.receive(message_update(1, "my private message", date=clock.now))
     await agent.settle()
 

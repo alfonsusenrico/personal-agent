@@ -1,0 +1,14 @@
+name: quick-reply-choice
+description: Asked to choose with buttons, the owner presses one and the press is answered.
+steps:
+  - send: "I can't decide dinner: pizza, sushi or tacos. give me buttons to pick"
+  - press: "sushi"
+expect:
+  turns: 2
+  user_contains: ["[pressed]"]
+fake_replies:
+  - "Pick one:\n<tg-button-row>\n<tg-button type=\"callback_data\" data=\"p\">Pizza</tg-button>\n<tg-button type=\"callback_data\" data=\"s\">Sushi</tg-button>\n<tg-button type=\"callback_data\" data=\"t\">Tacos</tg-button>\n</tg-button-row>"
+  - "Sushi it is. Enjoy!"
+expect_fake:
+  sent_methods: [sendRichMessage, sendRichMessage]
+  sent_contains: ["Sushi it is."]
