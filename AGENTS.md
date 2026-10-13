@@ -61,8 +61,9 @@ docker compose up --build migrate      # apply migrations to the local database
   cost real money: only run them for tasks the owner authorised.
 - Every record carries `person_id`, so other people can be added later
   without a data migration.
-- Put the current date, time, and timezone in the model instructions on
-  every turn; the model does not know them.
+- Put the current date, time, and timezone in a per-turn context message on
+  every turn; the model does not know them. Never put them in the
+  instructions: a changing prefix defeats prompt caching.
 - Migrations run as the compose `migrate` step, never at startup. An
   applied migration file never changes.
 - The repository is public on GitHub. Tracked files hold no secrets, no
