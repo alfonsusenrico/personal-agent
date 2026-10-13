@@ -1,0 +1,25 @@
+schema: spec-driven
+
+context: |
+  Project: Personal Agent - the owner's personal assistant over Telegram: a raw message log, reliable temporal memory, web search, Gmail and Calendar sync (read-only), app learning, and confirmed actions. The first consumer of llm-gateway.
+  Capabilities: database, personal-data, background-jobs, llm (deployed is added in the deployment phase).
+  Stack: Python 3.13 (uv, ruff, Pyright, pytest), PostgreSQL 16 with hand-written SQL migrations (psycopg 3), llm-gateway-client for every model call, Docker Compose.
+  Sources of truth: approved specs; the owner's local phased plan (research/, not published); official platform documentation (Telegram Bot API, Google APIs, search provider); the gateway's specs; owner confirmations.
+  Boundaries: owns the conversation, memory, tools and the tool loop, web search, personal data sync, and their keys; the gateway owns model provider keys, execution, budget grants, and the ledger.
+  Privacy: logs hold identifiers, counts, durations, and states only; never messages, memories, prompts, model output, email, or calendar content. External writes need the owner's confirmation, enforced in code.
+
+rules:
+  proposal:
+    - State the Expected Outcome as an observable result for the owner.
+    - List Non-goals.
+    - State whether the change adds a project capability and which standards that requires.
+    - State the expected cost per message or per day when the change adds model calls.
+  design:
+    - Number each decision and record rejected alternatives with reasons.
+    - Describe data, failure, and retry behaviour; include migration and rollback when data changes.
+    - For memory changes, state how correctness is measured.
+  tasks:
+    - Group tasks in phases; end each phase with an "Expected Result" line.
+    - Every task names the evidence that proves it (command, test, Telegram check).
+    - Mark tasks that need a paid model or search call as owner-authorised.
+    - The final task reports the branch and the verification record; the owner decides merge and deployment.
