@@ -81,7 +81,7 @@ class FakeTelegramServer:
             if method == "sendPoll":
                 result["poll"] = {"id": f"poll-{self._next_message_id}"}
             return _ok(result)
-        if method in ("sendRichMessageDraft", "sendMessageDraft"):
+        if method == "sendRichMessageDraft":
             self.drafts.append({"method": method, **body})
             return _ok(True)
         if method == "editMessageText":

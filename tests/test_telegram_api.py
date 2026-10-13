@@ -9,6 +9,7 @@ from pydantic import SecretStr
 
 from personal_agent.logging_setup import quiet_url_logging
 from personal_agent.telegram.api import (
+    THINKING_PLACEHOLDER,
     TelegramApi,
     TelegramConflict,
     TelegramError,
@@ -145,7 +146,15 @@ async def test_empty_draft_is_the_thinking_placeholder_with_stop() -> None:
     await api.send_draft(chat_id="1001", draft_id=7, markdown="So far")
 
     assert calls == [
-        ("sendMessageDraft", {"chat_id": 1001, "draft_id": 7, "text": "", "can_stop": True}),
+        (
+            "sendRichMessageDraft",
+            {
+                "chat_id": 1001,
+                "draft_id": 7,
+                "rich_message": {"markdown": THINKING_PLACEHOLDER},
+                "can_stop": True,
+            },
+        ),
         (
             "sendRichMessageDraft",
             {

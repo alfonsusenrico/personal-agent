@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+from personal_agent.telegram.api import THINKING_PLACEHOLDER
 from personal_agent.telegram.drafts import Drafts
 from tests.fakes import FakeTelegramServer, bad_request
 
@@ -42,7 +43,8 @@ async def test_placeholder_then_changing_text_then_refresh() -> None:
     shown = [
         (item["method"], item.get("rich_message", {}).get("markdown")) for item in server.drafts
     ]
-    assert shown[0] == ("sendMessageDraft", None)
+    # One draft method throughout, so the final rich message replaces the draft.
+    assert shown[0] == ("sendRichMessageDraft", THINKING_PLACEHOLDER)
     assert shown[1] == ("sendRichMessageDraft", "Hello  there")
     # Unchanged text is sent again only to keep the 30-second draft alive.
     assert len(shown) == 3
@@ -51,12 +53,14 @@ async def test_placeholder_then_changing_text_then_refresh() -> None:
 
 async def test_rejected_drafts_never_raise() -> None:
     server = FakeTelegramServer()
-    server.failures["sendMessageDraft"] = [bad_request("Bad Request: draft")]
+    server.failures["sendRichMessageDraft"] = [bad_request("Bad Request: draft")]
     time = _VirtualTime()
     drafts = Drafts(server.api(), sleep=time.sleep, monotonic=time.monotonic)
 
     async with drafts("1001", 7) as draft:
+        await _run_until(time, 1)
         draft.update("text")
         await _run_until(time, 3)
 
-    assert server.drafts[-1]["rich_message"]["markdown"] == "text"
+    assert server.failures["sendRichMessageDraft"] == []
+    assert [item["rich_message"]["markdown"] for item in server.drafts] == ["text"]
