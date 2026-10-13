@@ -1,0 +1,8 @@
+name: offline-overnight
+description: A message sent while the assistant was offline gets a reply that mentions the delay.
+steps:
+  - send: "are you awake? I need a word for 'tidy but not obsessive'"
+    minutes_ago: 510
+expect:
+  turns: 1
+  context_contains: ["You were offline", "8 hours 30 minutes"]

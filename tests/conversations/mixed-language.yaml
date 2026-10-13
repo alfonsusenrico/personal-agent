@@ -1,0 +1,6 @@
+name: mixed-language
+description: A mixed English and Indonesian message is answered in the same mix (owner review).
+steps:
+  - send: "Hari ini meeting-nya super long, I'm so drained. Ada tips buat recharge cepet?"
+expect:
+  turns: 1

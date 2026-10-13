@@ -20,8 +20,9 @@ The owner's personal assistant over Telegram, and the first consumer of
 
 Capabilities: database, personal-data, background-jobs, llm
 Design surface: Telegram conversation (no web UI)
-Language: code, identifiers, logs, and docs are English. The assistant's
-reply language is set in the conversation change.
+Language: code, identifiers, logs, and docs are English. The assistant
+replies in the language of the owner's latest message; fixed notices are in
+English and Indonesian.
 
 ## Commands
 
@@ -32,6 +33,9 @@ docker compose up -d db                # database for tests marked db (127.0.0.1
 ./scripts/check                        # every check: lock, format, lint, pyright, tests, compose, OpenSpec
 uv run ruff format                     # apply formatting
 docker compose up --build migrate      # apply migrations to the local database
+./scripts/test -q tests/test_context.py   # pytest with the local test settings from .env
+./scripts/converse                     # conversation scripts on the gateway stub (free)
+REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free stub replies
 ```
 
 ## Architecture map
@@ -44,8 +48,24 @@ docker compose up --build migrate      # apply migrations to the local database
   - `pool.py`: the async pool.
   - `migrate.py`: the checksummed, forward-only runner.
   - `migrations/NNNN_name.sql`: hand-written migrations.
+- `src/personal_agent/worker.py`: the worker process (advisory lock, startup
+  checks, poller, turn runner, sender).
+- `src/personal_agent/telegram/`: Bot API client (`api.py`), update
+  envelope and allowlist (`updates.py`), store-then-confirm poller, outbox
+  sender, typing indicator, and reply splitting (`render.py`).
+- `src/personal_agent/conversation/`:
+  - `store.py`: all conversation SQL (ingest, turns, answers, outbox).
+  - `runner.py`: one generation at a time, debounce, regeneration, commit.
+  - `context.py` and `persona.md`: the reply call layout (persona, window,
+    per-turn context note, the owner's turn).
+  - `notices.py`: fixed bilingual apology and budget notice.
+- `src/personal_agent/gateway/calls.py`: call IDs
+  (`pa:{turn.call_key}:{purpose}:{generation}:a{attempt}`), retries after
+  `execution_unknown`, and content-free `model_call` records.
 - `tests/`: tests marked `db` need `TEST_DATABASE_URL`; `REQUIRE_DB=1` makes a
-  missing database fail.
+  missing database fail. `fakes.py` and `harness.py` drive the real poller,
+  runner, and sender against a fake Telegram server and a fake gateway;
+  `conversations/*.yaml` are the synthetic conversation scripts.
 - The phased plan is local-only in `research/notes/`; this repository is
   public, so `research/` is ignored by git. Specs are in `openspec/specs/`.
 
@@ -56,7 +76,9 @@ docker compose up --build migrate      # apply migrations to the local database
   the gateway's own specs).
 - Model calls use stable `provider_call_id`s, so a resubmission replays
   instead of paying twice. An `execution_unknown` call is never resubmitted
-  under the same ID.
+  under the same ID. Call IDs are built from a random key stored on the row
+  (`turn.call_key`), never from a database sequence: the gateway remembers
+  IDs, and a reset or restored database would reuse sequence values.
 - Development and tests use the gateway's free stub model. Live model calls
   cost real money: only run them for tasks the owner authorised.
 - Every record carries `person_id`, so other people can be added later

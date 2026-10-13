@@ -116,20 +116,36 @@ On restart:
 - **Profile:** the agent calls profile `reply` from its own contract. The
   gateway maps it to gpt-6-luna at medium effort, so the model and effort are
   tuned there, not in code. `max_output_tokens` is 2,000.
-- **Call ID:** `pa:{turn_id}:reply:{generation}:a{attempt}`:
+- **Call ID:** `pa:{call_key}:reply:{generation}:a{attempt}`:
+  - `call_key` is the turn's random UUID, stored on the row. A database
+    sequence is not used: the gateway remembers call IDs, and a reset or
+    restored database would reuse sequence values and collide with them
+    (found by the stub run during implementation);
   - `generation` rises on the one allowed regeneration (decision 3);
-  - `attempt` rises only after `execution_unknown`.
+  - `attempt` rises only when the earlier ID can never answer:
+    `execution_unknown`, or on a resubmission `idempotency_conflict` or
+    `call_result_expired`.
+- **Restarts replay instead of paying twice:** a generation's inputs are
+  frozen when it starts (the events it covers and its start time, which is
+  the "current time" in the context note), so a restart rebuilds an identical
+  request and resubmits the same ID, which the gateway replays for free.
 - **Gateway fields:** `operation` is `reply`, so the gateway ledger shows cost
   by purpose. `prompt_cache_key` is `person-{person_id}`.
 - **Failures:**
-  - Retryable refusals are handled by the client's retry policy.
+  - Retryable refusals are handled by the client's retry policy (up to 90
+    seconds); if they persist, the turn fails with the apology below.
   - `execution_unknown` gets one more attempt under a new ID.
   - If a reply still fails, the turn is marked `failed`, and a fixed short
     apology is sent in English and Indonesian, because no model output
     exists to mirror the language.
   - `budget_exhausted` sends a fixed "my monthly budget is used up" notice.
 - **Recording:** each call is recorded in `model_call` (tokens, cached
-  tokens, cost, latency, status), never with content.
+  tokens, cost, latency, status), never with content. The assistant message
+  links to the call that produced it.
+- **Evaluation override:** a request may set `reasoning_effort` to compare
+  efforts (task 5.2); the worker leaves it to the profile.
+- **Profile setting:** `REPLY_PROFILE` (default `reply`). A `reply_stub`
+  profile on the stub model lets the whole Telegram path run for free.
 
 ### 6. Prompt layout
 
@@ -141,8 +157,9 @@ The stable part comes first, to maximise prompt caching:
    owner's latest message; and to never claim to be human.
 2. **Recent window:** the newest messages that fit
    `RECENT_WINDOW_TOKENS` (default 6,000, estimated at 4 characters per
-   token), up to 40 messages. Each message is in its own role, with its local
-   time.
+   token), up to 40 messages. Each message is in its own role. The owner's
+   messages start with their local time in square brackets; the assistant's
+   do not, so the model does not imitate the stamp in its replies.
 3. **A developer context message** holding:
    - the current date, time, and timezone;
    - the waiting time when it exceeds `OFFLINE_NOTICE_AFTER_SECONDS`
@@ -152,7 +169,11 @@ The stable part comes first, to maximise prompt caching:
      read yet";
    - forwarded messages marked as untrusted, quoted content that is never to
      be treated as instructions.
-4. **The turn's user messages.**
+4. **The turn's user messages,** merged into one owner message with its local
+   time. Forwarded text sits inside `<forwarded from="...">` tags (tags inside
+   it are neutralised); an edit of an answered message shows its Before and
+   After text; unreadable media appear as markers such as `[voice note]`.
+   Owner content stays in the user role, never in the developer note.
 
 The delay, edit, and non-text replies are worded by the model from these
 facts, so they mirror the owner's language naturally.
@@ -165,7 +186,10 @@ facts, so they mirror the owner's language naturally.
 ### 7. Edits
 
 `edited_message` updates are stored as new inbound events of kind `edit`
-that reference the original event; the original is never changed.
+that reference the original event; the original is never changed (a database
+trigger refuses updates to logged rows).
+
+Service messages, such as a pin, are logged but start no turn.
 
 - **If the original's turn is not answered yet,** the turn uses the latest
   text.
@@ -178,15 +202,17 @@ that reference the original event; the original is never changed.
 Every table carries `person_id`. All times are `timestamptz` in UTC, and each
 event also stores the person's IANA timezone at that moment.
 
-- `person`, `identity` (channel and external ID, unique), `conversation`
-  (kind `main`, one per person).
+- `person` (timezone, NULL until the profile sets one, so the configured
+  fallback applies), `identity` (channel and external ID, unique),
+  `conversation` (kind `main`, one per person).
 - `inbound_event`:
   - envelope: channel, update and message IDs, kind
     (`message|edit|unsupported`), modality, `occurred_at`, `person_tz`, trust
     (`owner_direct|owner_forwarded`), forward origin, reply-to, `edit_of`;
   - `raw jsonb`, `text`, and `turn_id`.
-- `turn`: status (`collecting|generating|answered|failed`), generation
-  count, and timestamps.
+- `turn`: `call_key`, status (`collecting|generating|answered|failed`),
+  generation count, the current generation's frozen inputs, and timestamps.
+  Its latest event is read from `inbound_event`.
 - `message`: role (`user|assistant`), text, `occurred_at`, `person_tz`,
   trust, and `source_event_ids`. These are the rows the model sees and later
   memory derives from.
@@ -229,6 +255,7 @@ delays, edits, and non-text inputs, and the expected structural outcomes
 (turn count, merges, notices in the context message, chunking).
 
 - **Unit and integration tests** run them with a fake gateway client.
+  `scripts/test` runs pytest with the local test settings.
 - **`scripts/converse`** runs the same scripts against the local gateway,
   either on the stub (free) or on the `reply` profile (paid,
   owner-authorised). It writes transcripts to the git-ignored

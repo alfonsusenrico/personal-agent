@@ -1,0 +1,14 @@
+name: edit-before-reply
+description: A typo fixed before the reply is answered from the corrected text, once.
+steps:
+  - send: "remind me what 15% of 80 is"
+    ref: question
+  - wait: 1
+  - edit:
+      ref: question
+      text: "remind me what 15% of 90 is"
+expect:
+  turns: 1
+  model_calls: 1
+  user_contains: ["15% of 90"]
+  user_excludes: ["15% of 80"]

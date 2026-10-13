@@ -17,7 +17,7 @@ Early development; everything runs locally for now.
 | Area | Status |
 |---|---|
 | Bootstrap: settings, logging, migrations, checks | Done |
-| Telegram conversation through the gateway | Planned |
+| Telegram conversation through the gateway | Done (local) |
 | Reliable long-term memory | Planned |
 | Gmail and Google Calendar sync (read-only) | Planned |
 | Learning your apps' APIs (read-only) | Planned |
@@ -48,6 +48,63 @@ docker compose up -d db        # local database on 127.0.0.1:54331
 ./scripts/check                # every check: lock, format, lint, types, tests, compose, OpenSpec
 docker compose up --build migrate
 ```
+
+### Talking to it on Telegram
+
+1. **Bot:** create the assistant's own bot with BotFather and put its token in
+   `.env` as `TELEGRAM_BOT_TOKEN`. Don't reuse a bot that another program
+   polls: Telegram allows one `getUpdates` consumer per bot.
+2. **Allowlist:** put your Telegram user ID in `TELEGRAM_ALLOWED_USER_IDS`.
+   Messages from anyone else, and from groups, are ignored and never stored.
+3. **Gateway:** from the gateway's directory, register the agent and put
+   its development key in `GATEWAY_API_KEY` without printing it. Give it a
+   `reply` profile on a real model and a free `reply_stub` profile on the
+   stub model:
+
+   ```bash
+   docker compose run --rm api llm-gateway-admin project register personal_agent --display-name "Personal Agent"
+   docker compose run --rm api llm-gateway-admin project set-request personal_agent --env development --rpm 30 --concurrency 2 --budget-usd 5.00 --cost-ceiling-usd 0.05
+   docker compose run --rm api llm-gateway-admin project set-profile personal_agent reply --provider openai --model gpt-6-luna --reasoning-effort medium --max-output-tokens 2000
+   docker compose run --rm api llm-gateway-admin project set-profile personal_agent reply_stub --provider stub --model stub-echo
+   ```
+
+4. **Run:** `docker compose up -d --build worker`. The worker reaches the
+   gateway on the host at `host.docker.internal:8360`. Set
+   `REPLY_PROFILE=reply_stub` to try the whole path for free; the stub echoes
+   your message.
+5. **Logs:** `docker compose logs -f worker` shows identifiers, counts, and
+   timings only.
+
+How it behaves:
+
+- Messages sent within 2 seconds of each other are answered as one reply. A
+  message sent while it is still thinking makes it reconsider, at most once.
+- It replies in the language of your latest message and knows the current
+  date and time (`DEFAULT_TIMEZONE`, Asia/Jakarta unless set).
+- After being offline it answers what it missed and mentions the delay;
+  edited messages are answered again; photos, voice notes, and files get an
+  honest "can't open this yet".
+- Nothing is lost across restarts. The one exception is a stop in the
+  instant after Telegram accepts a message and before the agent records it,
+  which can send that one message twice.
+- Each model call's tokens and cost are in the `model_call` table; no
+  message text is ever in a log.
+
+### Conversation scripts
+
+`tests/conversations/*.yaml` are synthetic conversations with expected
+outcomes. The test suite runs them against a fake gateway. `scripts/converse`
+runs them through your gateway and writes a transcript with each call's
+tokens and cost to the git-ignored `research/eval/`:
+
+```bash
+./scripts/converse                                   # free: the reply_stub profile
+./scripts/converse --profile reply --paid            # real model: spends budget
+./scripts/converse --profile reply --paid --effort low --only indonesian burst-merge
+```
+
+It needs `TEST_DATABASE_URL`, `GATEWAY_TEST_URL`, and `GATEWAY_TEST_API_KEY`
+in `.env`; the same gateway settings enable the gateway contract test.
 
 ## Development
 

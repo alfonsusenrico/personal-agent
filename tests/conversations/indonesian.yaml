@@ -1,0 +1,6 @@
+name: indonesian
+description: An Indonesian message gets an Indonesian reply (owner review).
+steps:
+  - send: "Besok aku mau lari pagi, enaknya jam berapa ya biar nggak terlalu panas?"
+expect:
+  turns: 1

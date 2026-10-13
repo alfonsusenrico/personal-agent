@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Run the synthetic conversation scripts against the local gateway (free stub profile
+# by default; --profile reply --paid spends the model budget). Transcripts go to the
+# git-ignored research/eval/. Settings come from .env like scripts/test.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+for name in TEST_DATABASE_URL GATEWAY_TEST_URL GATEWAY_TEST_API_KEY; do
+  if [[ -z "${!name:-}" && -f .env ]]; then
+    value="$(sed -n "s/^${name}=\([^ ]*\).*/\1/p" .env)"
+    if [[ -n "$value" ]]; then
+      export "${name}=${value}"
+    fi
+  fi
+done
+exec uv run python -m tests.converse "$@"
