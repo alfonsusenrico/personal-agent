@@ -280,6 +280,9 @@ def render_reply(
     stored = _MARKDOWN_MEDIA.sub(keep_shared_markdown_media, stored)
     stored = _HTML_MEDIA.sub(keep_shared_html_media, stored).strip()
     markdown = strip_directives(stored)
+    # The poll shows its own question; the same words as a message above it repeat it.
+    if poll is not None and markdown.casefold() == poll.question.casefold():
+        markdown = ""
     chunks = split_reply(markdown, limit=RICH_MAX_CHARS) if markdown else []
     return RenderedReply(
         stored=stored,

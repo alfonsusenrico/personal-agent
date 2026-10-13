@@ -1,0 +1,10 @@
+name: team-poll
+description: A poll that says it all is sent without a message repeating its question.
+steps:
+  - send: "make a poll to pick a team: Barcelona or Real Madrid"
+expect:
+  turns: 1
+fake_replies:
+  - "Which team do you support?\n<pa-poll question=\"Which team do you support?\" multiple=\"false\"><option>Barcelona</option><option>Real Madrid</option></pa-poll>"
+expect_fake:
+  sent_methods: [sendPoll]

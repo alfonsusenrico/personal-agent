@@ -212,6 +212,18 @@ async def test_poll_is_sent_after_the_message_and_votes_come_back(
     assert len(agent.responses.calls) == 2
 
 
+async def test_a_poll_alone_is_sent_without_a_message(
+    agent: Agent[FakeResponses], clock: FakeClock
+) -> None:
+    agent.responses.default_reply = (
+        'Which team?\n<pa-poll question="Which team?"><option>A</option><option>B</option></pa-poll>'
+    )
+    await agent.receive(message_update(1, "poll: A or B", date=clock.now))
+    await agent.settle()
+
+    assert [item["method"] for item in agent.server.sent] == ["sendPoll"]
+
+
 async def test_stop_discards_the_reply_and_the_next_reply_knows(
     agent: Agent[FakeResponses], pool: AsyncConnectionPool, clock: FakeClock
 ) -> None:

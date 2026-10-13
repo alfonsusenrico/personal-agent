@@ -75,6 +75,17 @@ def test_poll_is_parsed_and_removed_from_the_message() -> None:
     assert "<pa-poll" in rendered.stored
 
 
+def test_text_that_only_repeats_the_poll_question_is_not_sent() -> None:
+    rendered = render_reply(
+        'Which team?\n<pa-poll question="Which team?"><option>A</option><option>B</option></pa-poll>',
+        shared_urls=set(),
+    )
+
+    assert rendered.poll is not None
+    assert rendered.chunks == []
+    assert rendered.sends_anything
+
+
 def test_invalid_poll_and_unknown_directives_are_dropped() -> None:
     rendered = render_reply(
         '<pa-poll question=""><option>A</option></pa-poll><pa-dance/>Hi', shared_urls=set()
