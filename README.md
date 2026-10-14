@@ -18,7 +18,7 @@ Early development; everything runs locally for now.
 |---|---|
 | Bootstrap: settings, logging, migrations, checks | Done |
 | Telegram conversation through the gateway | Done (local) |
-| Introduction and profile (names, language, style) | Done (local) |
+| Profile: names, language, style, learned in conversation | Done (local) |
 | Reliable long-term memory | Planned |
 | Gmail and Google Calendar sync (read-only) | Planned |
 | Learning your apps' APIs (read-only) | Planned |
@@ -92,16 +92,18 @@ How it behaves:
 - It replies in the language of your latest message and knows the current
   date and time (`DEFAULT_TIMEZONE`, Asia/Jakarta unless set, or the
   timezone you confirmed).
-- **Introduction:** after your first message it offers a short introduction
-  once (Start or Later; `/start` begins or resumes it any time): what to call
-  you, its name, language, reply style, timezone, work or study, routine, and
-  interests, one skippable question at a time. A summary of exactly what will
-  be stored ends it; nothing counts until you press Save, which also renames
-  the bot on Telegram.
-- **Profile:** when you state a change ("call me Sam from now on"), it asks
-  and shows the value with Confirm and Cancel; only Confirm saves it.
-  `/profile` lists what it knows with a Remove button per entry. A change
-  keeps the old value as history; Remove deletes every version.
+- **Getting to know you:** it learns what to call you, its own name, your
+  language, reply style, timezone, work or study, routine, and interests
+  inside normal conversation. It always answers what you said first and
+  follows you when you change the subject. Now and then, at a natural moment,
+  it asks about one thing it doesn't know yet (at most one such question
+  every six of your messages, two tries per topic, never again once you wave
+  it off). `/start` asks the open questions now, until you move on.
+- **Saved at once:** whatever you tell it about yourself ("call me Sam", "keep
+  it short", "I'm in Tokyo this week") is saved right away and shown under the
+  reply as "Saved: … → …" with an Undo button. Naming it renames the bot on
+  Telegram. `/profile` lists what it knows with a Remove button per entry. A
+  change keeps the old value as history; Remove deletes every version.
 - After being offline it answers what it missed and mentions the delay;
   edited messages are answered again; photos, voice notes, and files get an
   honest "can't open this yet".

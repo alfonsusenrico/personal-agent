@@ -1,7 +1,7 @@
 # Verification: add-introduction-profile
 
-Status: tasks 1-5 are verified locally; the live Telegram check (6.1) is
-pending.
+Status: tasks 1-5 are verified locally on the revised design (gradual
+learning, saved with Undo); the live Telegram check (6.1) is in progress.
 
 Branch `feat/introduction-profile` on top of `main` at `b92bb1a`,
 2026-10-14. Local only: macOS host, Docker Compose, Postgres 16, the local
@@ -14,54 +14,79 @@ Synthetic only: test fixtures and the conversation scripts in
 `tests/conversations/`. Paid transcripts are in the git-ignored
 `research/eval/`.
 
-## Results
+## First version and why it was replaced
+
+The first version (`b053593`..`1361e17`) ran an introduction mode: a
+one-time offer, one topic per reply in a fixed order, values held as drafts
+until a Save at the end, and a Confirm for changes outside it. Live on
+Telegram the owner found:
+
+- the model's own "Mulai" button on the offer started nothing (fixed in
+  `d59a5aa`, then removed with the offer);
+- the timezone was asked instead of confirmed when one answer covered two
+  topics (`0b8b5b8`);
+- no reply after Save, the summary in one paragraph, a slow rename
+  (`eb0aefe`);
+- `/start` after Save re-entered question mode and held a name change as an
+  unsaved answer (`2d47226`).
+
+The owner then rejected the mode itself as scripted: every reply steered back
+to the open question and could not follow a topic jump. Owner decisions,
+2026-10-14: learn gradually inside conversation, save at once with Undo, no
+offer, `/start` optional. The artifacts were revised (`d43737c`) and the
+feature rebuilt (`2f2fd81`, `dd2c48b`, `dabc96e`).
+
+## Results (revised design)
 
 | Check | Evidence | Result |
 |---|---|---|
-| Migration `0004` applies, re-applies as a no-op, and its constraints hold | `tests/test_migrate.py`; `tests/test_schema.py`: one active and one pending value per field, bounded values, unknown field and status refused, an action button needs its target, only `bot_name` rows have no turn, an active or completed introduction needs its times | Pass |
-| Store: drafts, Save, confirm with history, newer proposal replaces older, cancel, remove deletes every version and keeps only the field name, restart from a completed introduction, offer once, bot name queued | `tests/test_profile_store.py` (9 tests) | Pass |
-| `<pa-profile>` and `<pa-intro-summary/>` parsing: normalised values, unknown field, bad timezone, over-long name, duplicate field, skip, hidden in drafts | `tests/test_rich.py` | Pass |
-| End to end on the fake server: offer once and Later, Save only after the summary and the bot renamed, Edit without saving, `/start` resumes, stated change waits for Confirm with no value in logs, stale Confirm, Cancel, `/profile` with Remove and no model call, removal note, timezone applied to new messages, refused rename keeps the name, command menu replaced once | `tests/test_profile_flow.py` (11 tests) | Pass |
-| The confirmed profile follows the guide in the instructions and is identical between turns; drafts and pending values stay in the context note | `tests/test_context.py` | Pass |
-| S1 behaviour unchanged | the whole suite: 191 tests | Pass |
-| Nine new scripts, free on the fake gateway | `tests/test_conversation_scripts.py`: 39 scripts | Pass |
-| `./scripts/check` at `578c057` | lock, format, lint, pyright 0, 191 tests, compose, OpenSpec strict valid | Pass |
+| Migration `0004` applies, re-applies as a no-op, and its constraints hold | `tests/test_migrate.py`; `tests/test_schema.py`: one active value per field with history, bounded values, unknown field and status refused, an action button needs its target, only `bot_name` rows have no turn, one pacing row per topic | Pass |
+| Store: save keeps history, Undo restores what a reply replaced (timezone included) and goes stale after a later change, Remove deletes every version and records only the field, asks and declines counted, `/start` asking now, bot name queued | `tests/test_profile_store.py` (7 tests) | Pass |
+| Directives: `<pa-profile>` values and skips, `<pa-ask>` per known topic, a timezone written with a note ("Asia/Tokyo (this week)"), hidden in drafts | `tests/test_rich.py`, `tests/test_profile_store.py` | Pass |
+| End to end on the fake server: saved at once with Undo and no value in logs, Undo restores the earlier value and the bot's name, stale Undo, paced questions (none for five turns after one) and a declined topic dropped, `/start` until a reply asks nothing, `/profile` with Remove and no model call, removal note, timezone applied to new messages, refused rename keeps the name, command menu replaced once | `tests/test_profile_flow.py` (9 tests) | Pass |
+| Notes and prompt: open topics only when a question is allowed, the asking-now note, timezone confirmation, a topic asked twice or declined is not open, the saved profile is identical between turns | `tests/test_context.py` | Pass |
+| S1 behaviour unchanged | the whole suite | Pass |
+| Scripts, free on the fake gateway | `tests/test_conversation_scripts.py`: 37 scripts, 8 of them for the profile | Pass |
+| `./scripts/check` at `dabc96e` | lock, format, lint, pyright 0, tests, compose, OpenSpec strict valid | Pass |
 
 ## Paid evaluation (task 5.2)
 
-gpt-6-luna, `reply` profile, owner-authorised with the proposal. Total
-USD 0.036011.
+gpt-6-luna, `reply` profile, owner-authorised with the proposal. Total for
+the change: USD 0.085935 (USD 0.040413 on the first version, USD 0.045522 on
+the revised one), above the proposal's estimate of about USD 0.05 because
+of the redesign.
 
-- **First run, all nine scripts (USD 0.014133):** 8 of 9 passed.
-  `intro-edit` failed: after finishing early and pressing Edit, the model
-  went back to the next open topic instead of the edit, and no summary
-  followed the change. Cause: finishing early left the unasked topics open.
-  Fixed in `578c057` (the early finish skips them; the reply to Edit only
-  asks what to change; the free script now reproduces the real model's reply
-  without `<pa-intro-summary/>` and failed before the fix). Reruns: 4/4 pass.
-- **Wording, from reading the transcripts:** the model repeated every
-  introduction answer back ("I'd save your style as..."), asked "What
-  timezone are you in?" instead of confirming the known one, and said "I'll
-  call you Sam" before Confirm. Fixed in `578c057`: the note lists the open
-  topics in order and asks for short acknowledgements and a timezone
-  confirmation; the persona asks "Want me to remember that?". Reruns of the
-  introduction scripts: answers acknowledged in a few words, "Are you in
-  Asia/Jakarta, or somewhere else?" and "Zona waktumu Asia/Jakarta?".
-- **Final runs on `578c057`:** `intro-english`, `intro-indonesian`,
-  `intro-stop-resume`, `intro-edit` (USD 0.004234); `incidental-mentions`,
-  `stated-change`, `timezone-change`, `intro-later`, `profile-30-turns`
-  (USD 0.008549): 9/9 pass.
-- **Measures:** zero false proposals across the incidental mentions (a
-  friend's nickname, a reply for a parent, a sibling's job and hours, a
-  routine for someone else, a formal reply for a manager); zero questions
-  about stored fields in the 30-turn run (it used the stored name, answered
-  Indonesian messages in Indonesian, kept replies short except where detail
-  was asked for, and listed the profile when asked "remind me what you know
-  about me").
+- **First full run of the eight revised scripts (USD 0.013020):** 7 of 8.
+  `timezone-change` failed: the reply said "I'll use Tokyo time this week"
+  but nothing changed. The model's raw output (read from the gateway's stored
+  result of the synthetic call) was `<pa-profile field="timezone">Asia/Tokyo
+  (this week)</pa-profile>`, which validation dropped. Fixed in `dd2c48b`:
+  the IANA name inside the value is taken, and the persona says the value is
+  only the name. Five reruns: 5/5.
+- **Too passive:** the model then asked nothing even at a greeting, and after
+  `/start` stopped after one question. Fixed in `dabc96e` (the notes say to
+  ask at a natural moment and to keep asking after `/start` while the owner
+  answers). Reruns: a greeting gets "Morning! What should I call you?", no
+  further question while the owner asks about breakfast and podcasts;
+  `/start` asks topic by topic and stops at "convert 5 miles to km".
+- **Final runs on `dabc96e`:** all eight pass. Topic jump: one question at
+  "slow day today", then the egg questions are answered without returning to
+  it. Declined: "not now" gets "No worries." and nothing more. Incidental
+  mentions: nothing saved. 30 turns with a full profile: zero questions about
+  stored fields.
+
+## Owner's local database (task 1.2)
+
+The first `0004` had been applied to the owner's local database. Before the
+change: a backup (`research/backups/2026-10-14-before-0004-rework.dump`,
+pg_dump custom format, 14 tables listed). The first version's tables and
+columns were removed, the 27 buttons of the old flow deleted (pressing one
+now says it is no longer available), the new `0004` applied by the migrate
+service, and the saved values restored with their history. The owner's last
+explicit request, a name change held unsaved by the first version, was
+applied as the current address. The worker started on `dabc96e` and set
+the menu to `/start`, `/profile`, `/stop`.
 
 ## Not verified yet
 
-- Task 6.1, the live Telegram check with the owner on phone and desktop:
-  the offer, a full introduction with a skip and an Edit, Save and the new
-  bot name, `/profile` with Remove, a confirmed and a cancelled change, and
-  the command menu.
+- Task 6.1, the live Telegram check with the owner on phone and desktop.

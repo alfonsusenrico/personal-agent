@@ -65,13 +65,13 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   - `notices.py`: fixed bilingual apology and budget notice.
 - `src/personal_agent/profile/`: the owner profile and introduction.
   - `fields.py`: fields, labels, and value rules.
-  - `store.py`: versioned entries (draft, pending, active, superseded),
-    removal, and introduction state.
-  - `apply.py`: a reply's `<pa-profile>` marks become drafts or pending
-    changes; adds the summary, Confirm, and offer buttons.
-  - `actions.py`: code-handled buttons, run in the press's transaction.
-  - `render.py`: summary, `/profile`, the instructions section, and the
-    per-turn notes, all rendered from stored rows.
+  - `store.py`: versioned entries (active, superseded) with Undo, removal,
+    and the pacing of getting-to-know questions.
+  - `apply.py`: a reply's `<pa-profile>` and `<pa-ask>` marks: values saved
+    at once with a "Saved:" line and Undo; questions and declines recorded.
+  - `actions.py`: Undo and Remove, run in the press's transaction.
+  - `render.py`: "Saved:" lines, `/profile`, the instructions section, and
+    the per-turn notes (open topics only when pacing allows).
 - `src/personal_agent/gateway/calls.py`: call IDs
   (`pa:{turn.call_key}:{purpose}:{generation}:a{attempt}`), retries after
   `execution_unknown`, and content-free `model_call` records.
