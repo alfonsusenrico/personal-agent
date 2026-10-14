@@ -37,10 +37,11 @@ EFFECTS = {
     "dislike": "5104858069142078462",
     "poop": "5046589136895476101",
 }
-# Each effect's own emoji, sent as the message when the reply has only the effect.
-EFFECT_EMOJI = {
+# Each effect's emoji as a reaction: a reply with only an effect has no message to
+# play it on, and the owner reads it as a reaction to their message.
+EFFECT_REACTIONS = {
     "celebrate": "🎉",
-    "love": "❤️",
+    "love": "❤",
     "like": "👍",
     "fire": "🔥",
     "dislike": "👎",
@@ -292,10 +293,14 @@ def render_reply(
     # The poll shows its own question; the same words as a message above it repeat it.
     if poll is not None and markdown.casefold() == poll.question.casefold():
         markdown = ""
-    # An effect plays on a message; without one it would be lost and the turn fail.
     if effect is not None and not markdown:
-        markdown = EFFECT_EMOJI[effect]
-        stored = f"{stored}{markdown}"
+        stored = _EFFECT.sub("", stored)
+        if reaction is None:
+            reaction = EFFECT_REACTIONS[effect]
+            stored = f'<pa-react emoji="{reaction}"/>{stored}'
+        else:
+            dropped["effect"] += 1
+        effect = None
     chunks = split_reply(markdown, limit=RICH_MAX_CHARS) if markdown else []
     return RenderedReply(
         stored=stored,

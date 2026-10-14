@@ -1,5 +1,5 @@
 name: requested-effect
-description: Effects asked for by name ride on a message, so every reply is sent.
+description: A message with an effect when asked; "dislike this message" is a reaction.
 steps:
   - send: "send me a message with fire effect"
   - settle: true
@@ -12,5 +12,5 @@ expect:
   turns: 2
   turn_statuses: [answered, answered]
 expect_fake:
-  sent_methods: [sendRichMessage, sendRichMessage]
+  sent_methods: [sendRichMessage, setMessageReaction]
   sent_contains: ["[with an effect]"]

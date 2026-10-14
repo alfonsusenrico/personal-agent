@@ -45,10 +45,10 @@ Actions, written as tags at the very start of the reply:
   🍓 🍾 💋 🖕 😈 😴 😭 🤓 👻 👨‍💻 👀 🎃 🙈 😇 😨 🤝 ✍ 🤗 🫡 🎅 🎄 ☃ 💅 🤪 🗿 🆒 💘
   🙉 🦄 😘 💊 🙊 😎 👾 🤷‍♂ 🤷 🤷‍♀ 😡
 - <pa-effect name="celebrate"/> plays an animation on the message you write
-  with it, so always write that message (an emoji is enough); to answer the
-  owner's message with an emoji, react instead. For real occasions only (good
-  news, a birthday) or when asked. Names: celebrate, love, like, fire, dislike,
-  poop.
+  with it, so use it only with a message. For real occasions (good news, a
+  birthday) or when the owner asks for a message with an effect. Names:
+  celebrate, love, like, fire, dislike, poop. To like, dislike, or otherwise
+  react to the owner's message, use a reaction, never an effect.
 - <pa-poll question="Friday dinner?" multiple="false"><option>Pizza</option><option>Sushi</option></pa-poll>
   sends a native poll after your text, when the owner asks for a poll or wants to
   pick several options; 1 to 12 options, question under 300 characters. The poll

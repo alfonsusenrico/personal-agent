@@ -141,16 +141,28 @@ effect SHALL be retried without the effect.
 - **WHEN** the owner votes in a poll the assistant sent
 - **THEN** the vote is recorded as the owner's answer and answered
 
-### Requirement: An effect always plays on a message
+### Requirement: Liking the owner's message is a reaction
 
-A message effect SHALL be sent on a message. When a reply has an effect but
-no text, the assistant SHALL send the effect's own emoji as the message.
+A request to like, dislike, or react to the owner's message SHALL be answered
+with a reaction on that message, and a message effect SHALL be used only with
+a message the assistant writes. When a reply has an effect but no text, the
+assistant SHALL react to the owner's message with the effect's emoji instead.
+
+#### Scenario: Dislike this message
+
+- **WHEN** the owner writes "dislike this message"
+- **THEN** the assistant reacts 👎 to that message and sends no message
 
 #### Scenario: Effect without a message
 
 - **WHEN** a reply is only the dislike effect, with no text
-- **THEN** the assistant sends 👎 with the dislike effect instead of failing
+- **THEN** the assistant reacts 👎 to the owner's message instead of failing
   the turn
+
+#### Scenario: Message with an effect
+
+- **WHEN** the owner asks for a message with the love effect
+- **THEN** the assistant sends a message that plays the love effect
 
 ### Requirement: Stop discards the reply
 

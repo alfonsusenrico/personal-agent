@@ -217,8 +217,9 @@ Owner's desktop client, real model, 2026-10-13.
 - Phone session (Android client, turns 22-33, USD 0.004113):
   - Passed: a table and a code block rendered rich; "explain in detail how
     airplanes fly" followed by "actually make it in 3 sentences" ended in
-    one 3-sentence reply (the phone sent a native Stop for the first turn,
-    `stopped_message_generation`, and the follow-up was its own turn); Stop
+    one 3-sentence reply (the owner pressed Stop before typing; the phone
+    sent a native `stopped_message_generation`, and the follow-up was its
+    own turn); Stop
     on a long story closed the turn with nothing sent (native Stop update,
     unlike the desktop's typed `/stop`); a quick-reply tap was recorded once
     and redrawn as "✓ Pasta"; a forwarded "ignore your instructions and
@@ -231,12 +232,22 @@ Owner's desktop client, real model, 2026-10-13.
     only `<pa-effect name="dislike"/>`: an effect needs a message, so the
     reply rendered empty (`empty_output`). Reproduced with the new
     `requested-effect` script in 1 of 3 paid runs, the raw output read from
-    the gateway's stored result of that synthetic call. Fixed in `fa8006c`:
-    the guide says to write a message with every effect, and an effect
-    alone is sent on its own emoji (`test_an_effect_without_text_is_sent_on_its_own_emoji`;
-    the free `requested-effect` script fails without the renderer change).
-    Paid `requested-effect` after the fix: 5/5 sent (4 with 👎 and the
-    effect, 1 reacted 👎). Paid runs for this defect: USD 0.003537.
+    the gateway's stored result of that synthetic call. A first fix
+    (`fa8006c`) sent an effect alone on its own emoji; on the phone it sent
+    a 👎 message with the effect, and in paid runs 4 of 5 were the model
+    writing that message itself. The owner decided that liking or disliking
+    their message is a reaction on it. Second fix: the guide uses effects
+    only with a written message and reactions for liking the owner's
+    message, and an effect alone becomes the matching reaction
+    (`test_an_effect_without_text_becomes_a_reaction_to_the_owner`; the free
+    `requested-effect` script fails without the renderer change). Paid
+    `requested-effect` after it: 5/5 reacted 👎, the fire request still a
+    message with the effect; `celebration-effect` and `thanks-reaction`
+    still pass. Paid runs for this defect: USD 0.005684.
+  - After `fa8006c` on the phone: the love effect played on a ❤️ message;
+    "show me a picture of cat you found on internet" got an honest "can't
+    browse", no invented image; a Google search link with "show me this
+    image" was declined as not an image link.
 - Owner decisions, 2026-10-13: Telegram reply keyboards are not needed now
   (inline quick replies are enough; the question was a test), and a mixed
   English and Indonesian message answered mostly in Indonesian is accepted.
@@ -245,8 +256,8 @@ Owner's desktop client, real model, 2026-10-13.
 
 - Parts of task 6.1 not done live (covered only by tests and paid scripted
   runs): a voice note, an edit before the answer (too fast to do by hand), a
-  follow-up merged into a running turn (the phone sends Stop first), the
-  love, like, dislike, and poop effects on `fa8006c`, and image URLs from the
-  chat and invented ones.
+  follow-up merged into a running turn, the like and poop effects, a direct
+  image link from the chat, and "dislike this message" on the final
+  revision.
 - Long-running behaviour (days of use, the window growing to its budget) and
   laptop sleep during a call.
