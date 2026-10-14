@@ -1,6 +1,7 @@
 # Verification: add-backups-and-feedback
 
-Status: tasks 1-5 verified locally; the owner's live check (6.1) is pending.
+Status: verified locally, including the owner's live check on Telegram
+(2026-10-14).
 
 Branch `feat/backups-and-feedback` on `main` at `1f9e27c`, 2026-10-14. Local
 only: macOS host, Docker Compose, PostgreSQL 16. No model calls in this change.
@@ -40,6 +41,22 @@ backup, and restore check (only counts and table names were read).
   have no file: 0004, 0005"); nothing changed. Both scripts now run inside
   the running backup service, so they always use the deployed revision.
 
-## Not verified yet
+## Live check (task 6.1)
 
-- Task 6.1, the owner's live check on Telegram and the review.
+The owner on Telegram Desktop, 2026-10-14, worker and backup on `2fed167`;
+the review and closing were checked by the agent with content-free queries
+and `--summary` only.
+
+| Check | Evidence | Result |
+|---|---|---|
+| 👎 on a reply, then replaced with 👍 | feedback 1 `dislike` withdrawn; three `reaction` events, none in a turn; no reply sent | Pass |
+| 👎 kept on another reply | feedback 2 open `dislike` on that reply | Pass |
+| `/note too long` as a reply to that answer | feedback 3 `note` (8 characters) on the same reply; 👌 sent through the outbox without a turn; no model call (the 2 calls in the window are the owner's 2 questions) | Pass |
+| Menu | `getMyCommands`: `start`, `profile`, `note`, `stop` | Pass |
+| Review | `--summary`: 2 open, 1 withdrawn, newest backup 0.1 hours old; `close 2 dismissed` closed it; `close 1 test` on the withdrawn flag: "#1 is not open", exit 1; summary then 1 open, 1 dismissed | Pass |
+| Logs | feedback lines carry IDs and kinds only; no note or reply text found; one transient `Polling failed: ReadTimeout`, retried by the poller | Pass |
+
+Not exercised live: `/note` sent without replying (covered by
+`tests/test_feedback_flow.py`), the phone client, and the full review
+listing, which prints the owner's messages and is left to the owner's own
+terminal (its format is covered by `tests/test_backup.py`).

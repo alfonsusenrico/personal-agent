@@ -67,9 +67,9 @@ Expected Result: the owner can restore and review from the README alone.
 
 ## 6. Live verification and delivery
 
-- [ ] 6.1 Owner live check on Telegram: 👎 then removed, 👎 kept, `/note`
+- [x] 6.1 Owner live check on Telegram: 👎 then removed, 👎 kept, `/note`
   as a reply and after a reply, the menu; then `./scripts/review` and close
   one flag. Verify: results and a log scan with no note or message text in
   `verification.md`.
-- [ ] 6.2 Run `./scripts/check`, open a PR for the branch, and report its
+- [x] 6.2 Run `./scripts/check`, open a PR for the branch, and report its
   URL and the verification record; the owner merges.
