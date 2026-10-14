@@ -1,8 +1,8 @@
 name: timezone-change
-description: A confirmed timezone change moves the owner's local time.
+description: A stated timezone is saved at once and moves the owner's local time.
 steps:
   - send: "I'm in Tokyo this week, use Tokyo time for me"
-  - press: "Confirm"
+  - settle: true
   - wait: 60
   - send: "what time is it for me now?"
 fake_replies:

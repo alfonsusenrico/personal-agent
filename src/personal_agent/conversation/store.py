@@ -21,14 +21,14 @@ from personal_agent.conversation.models import EventRow, GenerationPlan, Message
 from personal_agent.profile import actions as profile_actions
 from personal_agent.profile import store as profile_store
 from personal_agent.profile.actions import ActionResult
-from personal_agent.profile.render import ProfileState
+from personal_agent.profile.render import ProfileState, open_topics
 from personal_agent.telegram.rich import PollSpec, QuickReply
 from personal_agent.telegram.updates import Envelope
 
 CHANNEL = "telegram"
 # One regeneration after a mid-turn message; later messages start the next turn.
 MAX_GENERATIONS = 2
-# /start, optionally with a deep-link payload, begins or resumes the introduction.
+# /start, optionally with a deep-link payload, asks the open profile topics now.
 _START_COMMAND = re.compile(r"/start(@[A-Za-z0-9_]+)?(\s+\S+)?")
 
 
@@ -194,15 +194,16 @@ async def ingest(
         button_row = await _unused_button(connection, person_id, envelope.button_token or "")
         text, answerable = (button_row["label"], True) if button_row else (None, False)
         if button_row is not None and button_row["action"] is not None:
+            # Undo and Remove are done by code; the model does not answer them.
             action = await profile_actions.press(
                 connection, person_id, button_row["action"], button_row["target_id"], now
             )
-            answerable = action.done and action.answerable
+            answerable = False
     elif envelope.kind == "poll_answer":
         text = await _vote_text(connection, person_id, envelope)
         answerable = text is not None
     elif envelope.kind == "message" and text and _START_COMMAND.fullmatch(text.strip()):
-        await profile_store.start_introduction(connection, person_id, now)
+        await profile_store.set_asking_now(connection, person_id, now)
     turn_id = None
     if envelope.kind == "command" and text:
         turn_id = await _command_turn(connection, person_id, conversation_id, text[1:], now)
@@ -493,19 +494,31 @@ async def load_turn_input(
     )
 
 
+# Owner turns between two getting-to-know questions, outside /start.
+QUESTION_EVERY_TURNS = 6
+
+
 async def load_profile_state(
     connection: AsyncConnection, person_id: int, *, window_start: datetime | None
 ) -> ProfileState:
+    active = await profile_store.active(connection, person_id)
+    topics = await profile_store.topics(connection, person_id)
+    asking_now = await profile_store.asking_now(connection, person_id)
+    asked_at = [topic.last_asked_at for topic in topics.values() if topic.last_asked_at]
+    allowed = asking_now or not asked_at
+    if not allowed:
+        since = await profile_store.turns_since(connection, person_id, max(asked_at))
+        allowed = since >= QUESTION_EVERY_TURNS
     removed = (
         await profile_store.removed_since(connection, person_id, window_start)
         if window_start is not None
         else []
     )
     return ProfileState(
-        active=await profile_store.entries(connection, person_id, "active"),
-        drafts=await profile_store.entries(connection, person_id, "draft"),
-        pending=await profile_store.entries(connection, person_id, "pending"),
-        intro=await profile_store.introduction(connection, person_id),
+        active=active,
+        open_topics=open_topics(active, topics),
+        asking_now=asking_now,
+        question_allowed=allowed,
         removed=removed,
     )
 

@@ -95,14 +95,17 @@ def test_profile_values_are_validated_and_removed_from_the_message() -> None:
     assert "Samuel" not in rendered.stored
 
 
-def test_the_introduction_summary_is_a_flag() -> None:
+def test_questions_are_marked_per_known_topic() -> None:
     rendered = render_reply(
-        "Here's what I have.<pa-intro-summary/><pa-intro-summary/>", shared_urls=set()
+        'What does your day look like?<pa-ask field="routine"/><pa-ask field="routine"/>'
+        '<pa-ask field="shoe_size"/>',
+        shared_urls=set(),
     )
 
-    assert rendered.intro_summary
-    assert rendered.chunks == ["Here's what I have."]
-    assert rendered.stored.count("<pa-intro-summary/>") == 1
+    assert rendered.asks == ["routine"]
+    assert rendered.chunks == ["What does your day look like?"]
+    assert rendered.dropped == {"ask": 2}
+    assert rendered.stored.count('<pa-ask field="routine"/>') == 1
 
 
 def test_poll_is_parsed_and_removed_from_the_message() -> None:
@@ -202,6 +205,7 @@ def test_draft_view_hides_directives_buttons_and_unfinished_markup() -> None:
     assert draft_view("It is **very") == "It is"
     assert draft_view('Hi Sam!<pa-profile field="address">Sam</pa-profile> Next') == "Hi Sam! Next"
     assert draft_view('Hi Sam!<pa-profile field="address">Sa') == "Hi Sam!"
+    assert draft_view('Your day?<pa-ask field="routine"/>') == "Your day?"
 
 
 def test_mark_chosen_replaces_quick_replies_only() -> None:

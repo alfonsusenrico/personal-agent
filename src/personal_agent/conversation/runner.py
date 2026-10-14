@@ -261,7 +261,7 @@ class TurnRunner:
             rendered = render_reply(outcome.text, shared_urls=shared_urls(owner_texts))
             if rendered.dropped:
                 logger.info("Reply parts removed: %s", rendered.dropped)
-            if rendered.sends_anything or rendered.profile or rendered.intro_summary:
+            if rendered.sends_anything or rendered.profile:
                 return _Commit(
                     "answered",
                     rendered.stored,
@@ -283,7 +283,7 @@ class TurnRunner:
                 default_timezone=self._config.default_timezone,
                 window_limit=1,
             )
-            active = await profile_store.entries(connection, plan.person_id, "active")
+            active = await profile_store.active(connection, plan.person_id)
             text = profile_text(active, turn_input.person_tz)
             items = (
                 with_buttons([], text, remove_buttons(active))

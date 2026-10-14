@@ -26,7 +26,7 @@ async def test_script_outcome(path: Path, pool: AsyncConnectionPool) -> None:
     script = load_script(path)
     responses = FakeResponses()
     responses.script = list(script.get("fake_replies") or [])
-    agent = new_agent(pool, responses, FakeClock(START), fresh_owner=script.get("owner") == "fresh")
+    agent = new_agent(pool, responses, FakeClock(START))
 
     run = await run_script(script, pool, agent, fake=True)
 

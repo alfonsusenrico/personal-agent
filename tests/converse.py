@@ -66,7 +66,6 @@ async def _run_one(
                 reasoning_effort=args.effort,
                 # The stub answers with the script's replies, so the reply side is checked too.
                 stub_replies=list(script.get("fake_replies") or []) if on_stub else None,
-                fresh_owner=script.get("owner") == "fresh",
             )
             return await run_script(script, pool, agent, fake=on_stub)
         finally:

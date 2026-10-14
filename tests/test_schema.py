@@ -159,15 +159,14 @@ def _profile_entry(
     value: str = "Sam",
     status: str = "active",
 ) -> None:
-    confirmed = NOW if status in ("active", "superseded") else None
     superseded = NOW if status == "superseded" else None
     connection.execute(
         """
         INSERT INTO profile_entry (person_id, field, value, status, source_event_ids,
-            created_at, confirmed_at, superseded_at)
-        VALUES (%s, %s, %s, %s, '{}', %s, %s, %s)
+            saved_at, superseded_at)
+        VALUES (%s, %s, %s, %s, '{}', %s, %s)
         """,
-        (person_id, field, value, status, NOW, confirmed, superseded),
+        (person_id, field, value, status, NOW, superseded),
     )
 
 
@@ -175,13 +174,9 @@ def test_a_field_has_one_active_value_and_keeps_history(connection: psycopg.Conn
     person_id, _, _ = _seed(connection)
     _profile_entry(connection, person_id, value="Samuel", status="superseded")
     _profile_entry(connection, person_id, value="Sam")
-    _profile_entry(connection, person_id, value="Sammy", status="pending")
-    _profile_entry(connection, person_id, value="S", status="draft")
 
     with pytest.raises(psycopg.errors.UniqueViolation):
         _profile_entry(connection, person_id, value="Another")
-    with pytest.raises(psycopg.errors.UniqueViolation):
-        _profile_entry(connection, person_id, value="Another", status="pending")
 
 
 def test_profile_values_are_bounded_and_known(connection: psycopg.Connection) -> None:
@@ -194,7 +189,7 @@ def test_profile_values_are_bounded_and_known(connection: psycopg.Connection) ->
     with pytest.raises(psycopg.errors.CheckViolation):
         _profile_entry(connection, person_id, field="work", value="x" * 301)
     with pytest.raises(psycopg.errors.CheckViolation):
-        _profile_entry(connection, person_id, status="unknown")
+        _profile_entry(connection, person_id, status="draft")
 
 
 def test_an_action_button_needs_its_target(connection: psycopg.Connection) -> None:
@@ -220,12 +215,14 @@ def test_an_action_button_needs_its_target(connection: psycopg.Connection) -> No
     assert outbox is not None
     insert = (
         "INSERT INTO reply_button (person_id, turn_id, outbox_id, token, label, position,"
-        " created_at, action, target_id) VALUES (%s, %s, %s, %s, 'Save', 0, %s, %s, %s)"
+        " created_at, action, target_id) VALUES (%s, %s, %s, %s, 'Undo', 0, %s, %s, %s)"
     )
-    connection.execute(insert, (person_id, turn_id, outbox[0], "b:1", NOW, "intro_save", person_id))
+    connection.execute(insert, (person_id, turn_id, outbox[0], "b:1", NOW, "profile_undo", turn_id))
 
     with pytest.raises(psycopg.errors.CheckViolation):
-        connection.execute(insert, (person_id, turn_id, outbox[0], "b:2", NOW, "intro_save", None))
+        connection.execute(
+            insert, (person_id, turn_id, outbox[0], "b:2", NOW, "profile_undo", None)
+        )
     with pytest.raises(psycopg.errors.CheckViolation):
         connection.execute(insert, (person_id, turn_id, outbox[0], "b:3", NOW, "dance", 1))
 
@@ -242,16 +239,15 @@ def test_only_the_bot_name_is_sent_without_a_turn(connection: psycopg.Connection
         connection.execute(insert, (person_id, "rich", NOW))
 
 
-def test_an_introduction_in_progress_has_a_start(connection: psycopg.Connection) -> None:
+def test_a_topic_is_counted_once_per_person(connection: psycopg.Connection) -> None:
     person_id, _, _ = _seed(connection)
+    insert = "INSERT INTO profile_topic (person_id, field, asks) VALUES (%s, 'routine', %s)"
+    connection.execute(insert, (person_id, 1))
 
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        connection.execute(insert, (person_id, 1))
     with pytest.raises(psycopg.errors.CheckViolation):
         connection.execute(
-            "INSERT INTO introduction (person_id, state, updated_at) VALUES (%s, 'active', %s)",
-            (person_id, NOW),
-        )
-    with pytest.raises(psycopg.errors.CheckViolation):
-        connection.execute(
-            "INSERT INTO introduction (person_id, state, updated_at) VALUES (%s, 'completed', %s)",
-            (person_id, NOW),
+            "INSERT INTO profile_topic (person_id, field, asks) VALUES (%s, 'work', -1)",
+            (person_id,),
         )

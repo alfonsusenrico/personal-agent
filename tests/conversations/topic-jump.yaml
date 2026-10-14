@@ -1,0 +1,20 @@
+name: topic-jump
+description: After a getting-to-know question, an unrelated request is answered and the question is dropped.
+seed_profile:
+  address: Sam
+  assistant_name: Nara
+steps:
+  - send: "hi Nara, slow day today"
+  - settle: true
+  - wait: 30
+  - send: "how long should I boil an egg for a runny yolk?"
+  - settle: true
+  - wait: 30
+  - send: "and for hard boiled?"
+fake_replies:
+  - "Hi Sam! Slow days are nice. What does a usual day look like for you?<pa-ask field=\"routine\"/>"
+  - "About 6 minutes for a runny yolk."
+  - "About 10 minutes."
+expect:
+  questions_at_most: 1
+  profile_absent: [routine]

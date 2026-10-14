@@ -1,7 +1,7 @@
 """Turn the model's Telegram Rich Markdown into what is sent.
 
 The model writes Telegram Rich Markdown plus the agent's own `pa-` directives
-(reaction, effect, poll, profile values, the introduction summary). Rendering validates and removes the directives, keeps
+(reaction, effect, poll, profile values, getting-to-know questions). Rendering validates and removes the directives, keeps
 only quick-reply, URL, and copy-text buttons (quick replies get stored tokens in
 place of the model's callback data), and removes media whose URL the owner never
 shared. Nothing here calls Telegram.
@@ -134,7 +134,7 @@ _EFFECT = re.compile(r"<pa-effect\b([^>]*?)/?>(?:\s*</pa-effect>)?")
 _POLL = re.compile(r"<pa-poll\b([^>]*)>(.*?)</pa-poll>", re.DOTALL)
 _POLL_OPTION = re.compile(r"<option>(.*?)</option>", re.DOTALL)
 _PROFILE = re.compile(r"<pa-profile\b([^>]*?)(?:/>|>(.*?)</pa-profile>)", re.DOTALL)
-_INTRO_SUMMARY = re.compile(r"<pa-intro-summary\b[^>]*?/?>(?:\s*</pa-intro-summary>)?")
+_ASK = re.compile(r"<pa-ask\b([^>]*?)/?>(?:\s*</pa-ask>)?")
 _LEFTOVER_DIRECTIVE = re.compile(r"</?pa-[a-z-]*\b[^>]*>")
 # The lookahead keeps <tg-button-row> from matching as a button.
 _BUTTON = re.compile(r"<tg-button(?=[\s>])([^>]*)>(.*?)</tg-button>", re.DOTALL)
@@ -184,8 +184,8 @@ class RenderedReply:
     # Counts of removed parts by reason, for content-free logs.
     dropped: dict[str, int] = field(default_factory=dict)
     profile: list[ProfileMark] = field(default_factory=list)
-    # The model asked for the introduction summary.
-    intro_summary: bool = False
+    # Profile topics this reply asks the owner about.
+    asks: list[str] = field(default_factory=list)
 
     @property
     def sends_anything(self) -> bool:
@@ -213,7 +213,7 @@ def render_reply(
     dropped: Counter[str] = Counter()
     reaction, effect, poll = None, None, None
     profile: list[ProfileMark] = []
-    intro_summary = False
+    asks: list[str] = []
     # Valid directives are parked behind placeholders while unknown ones are removed.
     kept: list[str] = []
 
@@ -272,15 +272,16 @@ def render_reply(
         profile.append(ProfileMark(name, value))
         return keep(f'<pa-profile field="{name}">{html.escape(value, quote=False)}</pa-profile>')
 
-    def take_summary(_match: re.Match[str]) -> str:
-        nonlocal intro_summary
-        if intro_summary:
+    def take_ask(match: re.Match[str]) -> str:
+        name = _attributes(match.group(1)).get("field", "")
+        if name not in FIELDS or name in asks:
+            dropped["ask"] += 1
             return ""
-        intro_summary = True
-        return keep("<pa-intro-summary/>")
+        asks.append(name)
+        return keep(f'<pa-ask field="{name}"/>')
 
     stored = _PROFILE.sub(take_profile, text)
-    stored = _INTRO_SUMMARY.sub(take_summary, stored)
+    stored = _ASK.sub(take_ask, stored)
     stored = _REACT.sub(take_reaction, stored)
     stored = _EFFECT.sub(take_effect, stored)
     stored = _POLL.sub(take_poll, stored)
@@ -355,7 +356,7 @@ def render_reply(
         quick_replies=quick_replies,
         dropped=dict(dropped),
         profile=profile,
-        intro_summary=intro_summary,
+        asks=asks,
     )
 
 
@@ -367,7 +368,7 @@ def _is_shared(url: str, shared_urls: set[str]) -> bool:
 
 
 def _strip_complete_directives(text: str) -> str:
-    text = _INTRO_SUMMARY.sub("", _PROFILE.sub("", text))
+    text = _ASK.sub("", _PROFILE.sub("", text))
     return _POLL.sub("", _EFFECT.sub("", _REACT.sub("", text)))
 
 
@@ -400,17 +401,13 @@ def draft_view(partial: str) -> str:
     return _DANGLING_LIST_MARKER.sub("", text.strip())
 
 
-def without_quick_replies(markdown: str) -> str:
-    """The message with its quick-reply buttons (and rows left empty) removed."""
+def mark_chosen(markdown: str, label: str) -> str:
+    """The sent message with its quick replies replaced by the chosen option."""
     without = re.sub(
         r'<tg-button type="callback_data"[^>]*>.*?</tg-button>', "", markdown, flags=re.DOTALL
     )
-    return _EMPTY_ROW.sub("", without).rstrip()
-
-
-def mark_chosen(markdown: str, label: str) -> str:
-    """The sent message with its quick replies replaced by the chosen option."""
-    return f"{without_quick_replies(markdown)}\n\n✓ {label}".strip()
+    without = _EMPTY_ROW.sub("", without).rstrip()
+    return f"{without}\n\n✓ {label}".strip()
 
 
 def to_plain(markdown: str) -> str:

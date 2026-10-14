@@ -65,4 +65,4 @@ class TurnInput:
     events: list[EventRow]
     # Earlier messages, oldest first.
     window: list[MessageRow]
-    profile: ProfileState = field(default_factory=lambda: ProfileState([], [], [], None, []))
+    profile: ProfileState = field(default_factory=ProfileState)

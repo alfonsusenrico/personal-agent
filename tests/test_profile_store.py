@@ -58,6 +58,21 @@ async def _values(connection: AsyncConnection, person_id: int) -> list[tuple[Any
     return await cursor.fetchall()
 
 
+async def _save(
+    connection: AsyncConnection, person_id: int, turn_id: int, field: str, value: str
+) -> bool:
+    return await store.save(
+        connection, person_id, field, value, source_event_ids=[1], turn_id=turn_id, now=NOW
+    )
+
+
+async def _timezone(connection: AsyncConnection, person_id: int) -> Any:
+    cursor = await connection.execute("SELECT timezone FROM person WHERE id = %s", (person_id,))
+    row = await cursor.fetchone()
+    assert row is not None
+    return row[0]
+
+
 def test_values_are_normalised_and_checked() -> None:
     assert normalise("address", "  Sam \n ") == "Sam"
     assert normalise("timezone", "Asia/Tokyo") == "Asia/Tokyo"
@@ -67,59 +82,14 @@ def test_values_are_normalised_and_checked() -> None:
     assert normalise("favourite_colour", "blue") is None
 
 
-async def test_introduction_drafts_count_only_after_save(pool: AsyncConnectionPool) -> None:
+async def test_a_new_value_keeps_the_old_one_as_history(pool: AsyncConnectionPool) -> None:
     async with pool.connection() as connection:
         person_id = await _person(connection)
         turn_id = await _turn(connection, person_id)
-        await store.start_introduction(connection, person_id, NOW)
-        await store.save_draft(
-            connection, person_id, "address", "Sam", source_event_ids=[1], turn_id=turn_id, now=NOW
-        )
-        await store.save_draft(
-            connection,
-            person_id,
-            "timezone",
-            "Asia/Tokyo",
-            source_event_ids=[1],
-            turn_id=turn_id,
-            now=NOW,
-        )
-        await store.skip(connection, person_id, "interests", NOW)
 
-        assert await store.entries(connection, person_id, "active") == []
-        intro = await store.introduction(connection, person_id)
-        assert intro == store.Introduction("active", ("interests",))
-
-        changed = await store.save_introduction(connection, person_id, NOW)
-
-        assert changed is not None and [entry.field for entry in changed] == ["address", "timezone"]
-        assert await _values(connection, person_id) == [
-            ("address", "Sam", "active"),
-            ("timezone", "Asia/Tokyo", "active"),
-        ]
-        cursor = await connection.execute("SELECT timezone FROM person WHERE id = %s", (person_id,))
-        assert await cursor.fetchone() == ("Asia/Tokyo",)
-        assert await store.introduction(connection, person_id) == store.Introduction(
-            "completed", ()
-        )
-        assert await store.save_introduction(connection, person_id, NOW) is None
-
-
-async def test_a_confirmed_change_keeps_the_old_value_as_history(pool: AsyncConnectionPool) -> None:
-    async with pool.connection() as connection:
-        person_id = await _person(connection)
-        turn_id = await _turn(connection, person_id)
-        for value in ("Samuel", "Sam"):
-            await store.propose(
-                connection,
-                person_id,
-                "address",
-                value,
-                source_event_ids=[1],
-                turn_id=turn_id,
-                now=NOW,
-            )
-            assert await store.confirm_pending(connection, person_id, turn_id, NOW) is not None
+        assert await _save(connection, person_id, turn_id, "address", "Samuel")
+        assert await _save(connection, person_id, turn_id, "address", "Sam")
+        assert not await _save(connection, person_id, turn_id, "address", "Sam")
 
         assert await _values(connection, person_id) == [
             ("address", "Samuel", "superseded"),
@@ -127,46 +97,30 @@ async def test_a_confirmed_change_keeps_the_old_value_as_history(pool: AsyncConn
         ]
 
 
-async def test_a_newer_proposal_replaces_an_unconfirmed_one(pool: AsyncConnectionPool) -> None:
+async def test_undo_restores_what_the_reply_replaced(pool: AsyncConnectionPool) -> None:
     async with pool.connection() as connection:
         person_id = await _person(connection)
-        turn_id = await _turn(connection, person_id)
-        await store.propose(
-            connection, person_id, "address", "Sam", source_event_ids=[1], turn_id=turn_id, now=NOW
+        first = await _turn(connection, person_id)
+        await _save(connection, person_id, first, "timezone", "Asia/Jakarta")
+        cursor = await connection.execute(
+            "INSERT INTO turn (person_id, conversation_id, status, opened_at, closed_at) "
+            "SELECT person_id, conversation_id, 'answered', opened_at, opened_at FROM turn "
+            "WHERE id = %s RETURNING id",
+            (first,),
         )
-        await store.propose(
-            connection,
-            person_id,
-            "address",
-            "Sammy",
-            source_event_ids=[2],
-            turn_id=turn_id,
-            now=NOW,
-        )
+        row = await cursor.fetchone()
+        assert row is not None
+        second = row[0]
+        await _save(connection, person_id, second, "timezone", "Asia/Tokyo")
+        await _save(connection, person_id, second, "work", "Engineer")
+        assert await _timezone(connection, person_id) == "Asia/Tokyo"
 
-        assert await _values(connection, person_id) == [("address", "Sammy", "pending")]
-        assert await store.cancel_pending(connection, person_id, turn_id)
-        assert await store.confirm_pending(connection, person_id, turn_id, NOW) is None
-        assert await _values(connection, person_id) == []
+        restored = await store.undo_turn(connection, person_id, second)
 
-
-async def test_confirming_the_current_value_adds_no_history(pool: AsyncConnectionPool) -> None:
-    async with pool.connection() as connection:
-        person_id = await _person(connection)
-        turn_id = await _turn(connection, person_id)
-        for _ in range(2):
-            await store.propose(
-                connection,
-                person_id,
-                "address",
-                "Sam",
-                source_event_ids=[1],
-                turn_id=turn_id,
-                now=NOW,
-            )
-            await store.confirm_pending(connection, person_id, turn_id, NOW)
-
-        assert await _values(connection, person_id) == [("address", "Sam", "active")]
+        assert sorted(restored or []) == [("timezone", "Asia/Jakarta"), ("work", None)]
+        assert await _values(connection, person_id) == [("timezone", "Asia/Jakarta", "active")]
+        assert await _timezone(connection, person_id) == "Asia/Jakarta"
+        assert await store.undo_turn(connection, person_id, second) is None
 
 
 async def test_remove_deletes_every_version_and_records_only_the_field(
@@ -176,23 +130,13 @@ async def test_remove_deletes_every_version_and_records_only_the_field(
         person_id = await _person(connection)
         turn_id = await _turn(connection, person_id)
         for value in ("Asia/Jakarta", "Asia/Tokyo"):
-            await store.propose(
-                connection,
-                person_id,
-                "timezone",
-                value,
-                source_event_ids=[1],
-                turn_id=turn_id,
-                now=NOW,
-            )
-            await store.confirm_pending(connection, person_id, turn_id, NOW)
-        (active,) = await store.entries(connection, person_id, "active")
+            await _save(connection, person_id, turn_id, "timezone", value)
+        (entry,) = await store.active(connection, person_id)
 
-        assert await store.remove(connection, person_id, active.id, NOW) == "timezone"
-        assert await store.remove(connection, person_id, active.id, NOW) is None
+        assert await store.remove(connection, person_id, entry.id, NOW) == "timezone"
+        assert await store.remove(connection, person_id, entry.id, NOW) is None
         assert await _values(connection, person_id) == []
-        cursor = await connection.execute("SELECT timezone FROM person WHERE id = %s", (person_id,))
-        assert await cursor.fetchone() == (None,)
+        assert await _timezone(connection, person_id) is None
         cursor = await connection.execute("SELECT * FROM profile_removal")
         assert len(await cursor.fetchall()) == 1
         assert await store.removed_since(connection, person_id, NOW - timedelta(minutes=1)) == [
@@ -201,41 +145,28 @@ async def test_remove_deletes_every_version_and_records_only_the_field(
         assert await store.removed_since(connection, person_id, NOW) == []
 
 
-async def test_restarting_a_completed_introduction_starts_from_the_profile(
-    pool: AsyncConnectionPool,
-) -> None:
+async def test_questions_and_declines_are_counted_per_topic(pool: AsyncConnectionPool) -> None:
     async with pool.connection() as connection:
         person_id = await _person(connection)
-        turn_id = await _turn(connection, person_id)
-        await store.start_introduction(connection, person_id, NOW)
-        await store.save_draft(
-            connection, person_id, "address", "Sam", source_event_ids=[1], turn_id=turn_id, now=NOW
-        )
-        await store.skip(connection, person_id, "work", NOW)
-        await store.save_introduction(connection, person_id, NOW)
+        await store.record_ask(connection, person_id, "routine", NOW)
+        await store.record_ask(connection, person_id, "routine", NOW + timedelta(minutes=5))
+        await store.record_decline(connection, person_id, "work", NOW)
 
-        await store.start_introduction(connection, person_id, NOW)
+        topics = await store.topics(connection, person_id)
 
-        drafts = await store.entries(connection, person_id, "draft")
-        assert [(entry.field, entry.value) for entry in drafts] == [("address", "Sam")]
-        # A review: topics without a value stay skipped, so nothing is asked again.
-        intro = await store.introduction(connection, person_id)
-        assert intro is not None and intro.state == "active"
-        assert "address" not in intro.skipped and "work" in intro.skipped
-        assert len(intro.skipped) == 7
-        assert await store.save_introduction(connection, person_id, NOW) == []
-        assert await _values(connection, person_id) == [("address", "Sam", "active")]
+        assert topics["routine"] == store.Topic(2, NOW + timedelta(minutes=5), False)
+        assert topics["work"].declined
 
 
-async def test_the_offer_is_recorded_once_and_later_declines_it(pool: AsyncConnectionPool) -> None:
+async def test_start_asks_now_until_cleared(pool: AsyncConnectionPool) -> None:
     async with pool.connection() as connection:
         person_id = await _person(connection)
 
-        assert await store.mark_offered(connection, person_id, NOW)
-        assert not await store.mark_offered(connection, person_id, NOW)
-        assert await store.decline_introduction(connection, person_id, NOW)
-        assert not await store.decline_introduction(connection, person_id, NOW)
-        assert await store.introduction(connection, person_id) == store.Introduction("declined", ())
+        assert not await store.asking_now(connection, person_id)
+        await store.set_asking_now(connection, person_id, NOW)
+        assert await store.asking_now(connection, person_id)
+        await store.set_asking_now(connection, person_id, None)
+        assert not await store.asking_now(connection, person_id)
 
 
 async def test_the_bot_name_is_queued_for_the_owner_chat(pool: AsyncConnectionPool) -> None:

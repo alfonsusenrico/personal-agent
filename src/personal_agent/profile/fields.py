@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-# Introduction order: names first, then how to talk, then the basics.
+# Display and question order: names first, then how to talk, then the basics.
 FIELDS = (
     "address",
     "assistant_name",
@@ -15,7 +15,7 @@ FIELDS = (
     "routine",
     "interests",
 )
-# Shown in the summary and /profile; the values are the owner's own words.
+# Shown in "Saved:" lines and /profile; the values are the owner's own words.
 LABELS = {
     "address": "What to call you",
     "assistant_name": "My name",

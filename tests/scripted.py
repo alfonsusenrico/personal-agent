@@ -2,9 +2,7 @@
 
 A script lists what the owner does (messages, edits, media, forwards, waits, a
 message sent while the assistant is thinking, button presses) and the structural
-outcome expected. `owner: fresh` starts before the introduction was offered (other
-scripts start after the owner declined it); `seed_profile` starts with a saved
-profile.
+outcome expected. `seed_profile` starts with a saved profile.
 The same scripts run free in the test suite against a fake gateway and, through
 `scripts/converse`, against the real gateway for a transcript the owner reviews.
 """
@@ -47,8 +45,7 @@ _EXPECTATION_KEYS = frozenset(
         "turn_statuses",
         "profile_active",
         "profile_absent",
-        "pending_fields",
-        "introduction_state",
+        "questions_at_most",
         "bot_names",
         "instructions_contains",
     }
@@ -321,7 +318,7 @@ def _check_sent(expect: dict[str, Any], run: ScriptRun) -> list[str]:
 
 
 async def _seed_profile(pool: AsyncConnectionPool, values: dict[str, str]) -> None:
-    """The owner with a completed introduction and these saved values."""
+    """The owner with these saved values."""
     async with pool.connection() as connection, connection.transaction():
         cursor = await connection.execute(
             "INSERT INTO person (created_at) VALUES (%s) RETURNING id", (START,)
@@ -338,32 +335,24 @@ async def _seed_profile(pool: AsyncConnectionPool, values: dict[str, str]) -> No
             "INSERT INTO conversation (person_id, kind, created_at) VALUES (%s, 'main', %s)",
             (person_id, START),
         )
-        await connection.execute(
-            "INSERT INTO introduction (person_id, state, started_at, completed_at, updated_at) "
-            "VALUES (%s, 'completed', %s, %s, %s)",
-            (person_id, START, START, START),
-        )
         for name, value in values.items():
             await connection.execute(
                 "INSERT INTO profile_entry (person_id, field, value, status, source_event_ids, "
-                "created_at, confirmed_at) VALUES (%s, %s, %s, 'active', '{}', %s, %s)",
-                (person_id, name, value, START, START),
+                "saved_at) VALUES (%s, %s, %s, 'active', '{}', %s)",
+                (person_id, name, value, START),
             )
 
 
-async def _profile_rows(pool: AsyncConnectionPool) -> tuple[dict[str, str], list[str], str | None]:
+async def _profile_rows(pool: AsyncConnectionPool) -> tuple[dict[str, str], int]:
+    """The saved values and how many getting-to-know questions were asked."""
     async with pool.connection() as connection:
         cursor = await connection.execute(
             "SELECT field, value FROM profile_entry WHERE status = 'active'"
         )
         active = {row[0]: row[1] for row in await cursor.fetchall()}
-        cursor = await connection.execute(
-            "SELECT field FROM profile_entry WHERE status = 'pending' ORDER BY field"
-        )
-        pending = [row[0] for row in await cursor.fetchall()]
-        cursor = await connection.execute("SELECT state FROM introduction")
-        state = await cursor.fetchone()
-    return active, pending, state[0] if state else None
+        cursor = await connection.execute("SELECT coalesce(sum(asks), 0) FROM profile_topic")
+        row = await cursor.fetchone()
+    return active, int(row[0]) if row else 0
 
 
 async def _model_calls(pool: AsyncConnectionPool) -> list[dict[str, Any]]:
@@ -399,15 +388,15 @@ async def _check(expect: dict[str, Any], run: ScriptRun, pool: AsyncConnectionPo
         if key in expect and expect[key] != actual:
             failures.append(f"{key}: expected {expect[key]!r}, got {actual!r}")
 
-    active, pending, intro_state = await _profile_rows(pool)
+    active, questions = await _profile_rows(pool)
     for name, expected in (expect.get("profile_active") or {}).items():
         if expected.lower() not in active.get(name, "").lower():
             failures.append(f"profile {name}: expected {expected!r}, got {active.get(name)!r}")
     failures += [
         f"profile {name} is saved" for name in expect.get("profile_absent", []) if name in active
     ]
-    compare("pending_fields", pending)
-    compare("introduction_state", intro_state)
+    if "questions_at_most" in expect and questions > expect["questions_at_most"]:
+        failures.append(f"questions: at most {expect['questions_at_most']}, got {questions}")
     compare("bot_names", run.bot_names)
     instructions = run.calls[-1].body.get("instructions", "") if run.calls else ""
     for text in expect.get("instructions_contains", []):
@@ -441,7 +430,6 @@ def new_agent(
     profile: str = "reply",
     reasoning_effort: str | None = None,
     stub_replies: list[str] | None = None,
-    fresh_owner: bool = False,
 ) -> Agent[RecordingResponses]:
     return Agent(
         pool,
@@ -450,5 +438,4 @@ def new_agent(
         clock,
         profile=profile,
         reasoning_effort=reasoning_effort,
-        introduction_declined=not fresh_owner,
     )

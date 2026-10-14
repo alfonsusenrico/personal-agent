@@ -100,5 +100,5 @@ steps:
   - send: "good night"
 expect:
   turns: 30
-  pending_fields: []
+  questions_at_most: 0
   instructions_contains: ["- Your name: Nara", "- Call the owner: Sam"]

@@ -7,6 +7,7 @@ import logging
 from personal_agent.telegram.api import TelegramApi, TelegramError
 
 COMMANDS = [
+    {"command": "start", "description": "Let me ask what I don't know about you yet"},
     {"command": "profile", "description": "Show what I know about you"},
     {"command": "stop", "description": "Stop the reply being written"},
 ]

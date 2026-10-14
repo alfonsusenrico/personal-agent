@@ -28,13 +28,8 @@ class Agent[R: Responses]:
         gateway: Responses | None = None,
         profile: str = "reply",
         reasoning_effort: str | None = None,
-        introduction_declined: bool = True,
     ) -> None:
         self.server = server
-        self._pool = pool
-        # Scenarios about the conversation itself start after the owner declined the
-        # introduction, so its one-time offer does not change their replies.
-        self._introduction_declined = introduction_declined
         self.responses = responses
         self.clock = clock
         self.sleeps: list[float] = []
@@ -74,20 +69,6 @@ class Agent[R: Responses]:
     async def receive(self, *updates: dict[str, Any]) -> None:
         self.server.updates.extend(updates)
         await self.poller.poll_once()
-        if self._introduction_declined:
-            async with self._pool.connection() as connection:
-                await connection.execute(
-                    """
-                    INSERT INTO introduction (person_id, state, offered_at, updated_at)
-                    SELECT id, 'declined', created_at, created_at FROM person
-                    ON CONFLICT (person_id) DO NOTHING
-                    """
-                )
-                cursor = await connection.execute("SELECT EXISTS (SELECT 1 FROM person)")
-                row = await cursor.fetchone()
-                # Once the owner exists, later receives (some from inside a model call,
-                # where a Stop cancels the task) need no database work here.
-                self._introduction_declined = not (row and row[0])
 
     async def think(self) -> None:
         """Run turns until none is open, letting debounce time pass."""

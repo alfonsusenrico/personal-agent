@@ -1,0 +1,30 @@
+name: getting-to-know
+description: A first chat learns names in passing while the owner talks about other things.
+steps:
+  - send: "hey, morning!"
+  - settle: true
+  - wait: 30
+  - send: "Sam. And you can be Nara"
+  - settle: true
+  - wait: 30
+  - send: "any idea for a quick breakfast?"
+  - settle: true
+  - wait: 30
+  - send: "nice, thanks"
+  - settle: true
+  - wait: 30
+  - send: "what's a good podcast about space?"
+fake_replies:
+  - "Morning! What should I call you, by the way?<pa-ask field=\"address\"/>"
+  - "Nice to meet you, Sam! Nara it is.<pa-profile field=\"address\">Sam</pa-profile><pa-profile field=\"assistant_name\">Nara</pa-profile>"
+  - "Yogurt with fruit and granola takes two minutes."
+  - "<pa-react emoji=\"👍\"/>"
+  - "Try Planetary Radio."
+expect:
+  profile_active:
+    address: Sam
+    assistant_name: Nara
+  bot_names: [Nara]
+  questions_at_most: 1
+expect_fake:
+  sent_contains: ["Saved:", "- **What to call you** → Sam", "- **My name** → Nara", "Undo"]

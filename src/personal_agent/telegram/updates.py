@@ -6,8 +6,8 @@ because a stranger's message is their personal data.
 
 Some Telegram clients send a Stop press as a typed /stop command instead of a
 stopped_message_generation update, so /stop is a Stop press too, never a message.
-/profile is a command answered by code; /start is a message that also begins the
-introduction.
+/profile is a command answered by code; /start is a message that also asks the
+assistant to get to know the owner now.
 """
 
 from __future__ import annotations

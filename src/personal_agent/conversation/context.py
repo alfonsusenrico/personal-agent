@@ -1,10 +1,10 @@
-"""Build the reply call: persona, platform guide, and the confirmed profile, then
-the recent window, a per-turn context note, and the turn.
+"""Build the reply call: persona, platform guide, and the saved profile, then the
+recent window, a per-turn context note, and the turn.
 
 The stable part comes first so the provider can cache it: the instructions, then
-earlier messages (which only grow at the end). The current date and time, and the
-introduction's drafts and unconfirmed changes, live in the per-turn context note,
-never in the instructions.
+earlier messages (which only grow at the end). The current date and time, and what
+the profile still lacks, live in the per-turn context note, never in the
+instructions.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from personal_agent.conversation.models import EventRow, MessageRow, TurnInput
-from personal_agent.profile.render import SAVE_LABEL, context_lines, instructions_section
+from personal_agent.profile.render import context_lines, instructions_section
 from personal_agent.profile.store import Entry
 
 # A rough, deliberately conservative token estimate for budgeting the window.
@@ -58,7 +58,7 @@ def _base_instructions() -> str:
 
 
 def reply_instructions(active_profile: list[Entry] | None = None) -> str:
-    """The persona, the platform guide, then the confirmed profile: stable between
+    """The persona, the platform guide, then the saved profile: stable between
     profile changes, so the provider caches it."""
     section = instructions_section(active_profile or [])
     base = _base_instructions()
@@ -249,11 +249,6 @@ def context_note(
     return "\n".join(lines)
 
 
-def offer_due(turn: TurnInput) -> bool:
-    """The introduction is offered once, after a reply, when it has never been offered."""
-    return turn.profile.intro is None and turn.plan.command is None
-
-
 @dataclass(frozen=True, slots=True)
 class ReplyRequest:
     instructions: str
@@ -300,14 +295,7 @@ def build_reply_request(
                 now=now,
                 tz=turn.person_tz,
                 offline_after=offline_after,
-                profile_lines=context_lines(
-                    turn.profile,
-                    offer_due=offer_due(turn),
-                    tz=turn.person_tz,
-                    just_saved=any(
-                        event.kind == "button" and event.text == SAVE_LABEL for event in turn.events
-                    ),
-                ),
+                profile_lines=context_lines(turn.profile, tz=turn.person_tz),
             ),
         }
     )
