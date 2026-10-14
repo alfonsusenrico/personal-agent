@@ -149,3 +149,109 @@ def test_reactions_carry_no_text_and_messages_must(connection: psycopg.Connectio
             """,
             (person_id, turn_id, message[0], NOW),
         )
+
+
+def _profile_entry(
+    connection: psycopg.Connection,
+    person_id: int,
+    *,
+    field: str = "address",
+    value: str = "Sam",
+    status: str = "active",
+) -> None:
+    confirmed = NOW if status in ("active", "superseded") else None
+    superseded = NOW if status == "superseded" else None
+    connection.execute(
+        """
+        INSERT INTO profile_entry (person_id, field, value, status, source_event_ids,
+            created_at, confirmed_at, superseded_at)
+        VALUES (%s, %s, %s, %s, '{}', %s, %s, %s)
+        """,
+        (person_id, field, value, status, NOW, confirmed, superseded),
+    )
+
+
+def test_a_field_has_one_active_value_and_keeps_history(connection: psycopg.Connection) -> None:
+    person_id, _, _ = _seed(connection)
+    _profile_entry(connection, person_id, value="Samuel", status="superseded")
+    _profile_entry(connection, person_id, value="Sam")
+    _profile_entry(connection, person_id, value="Sammy", status="pending")
+    _profile_entry(connection, person_id, value="S", status="draft")
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        _profile_entry(connection, person_id, value="Another")
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        _profile_entry(connection, person_id, value="Another", status="pending")
+
+
+def test_profile_values_are_bounded_and_known(connection: psycopg.Connection) -> None:
+    person_id, _, _ = _seed(connection)
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        _profile_entry(connection, person_id, field="favourite_colour")
+    with pytest.raises(psycopg.errors.CheckViolation):
+        _profile_entry(connection, person_id, field="assistant_name", value="x" * 65)
+    with pytest.raises(psycopg.errors.CheckViolation):
+        _profile_entry(connection, person_id, field="work", value="x" * 301)
+    with pytest.raises(psycopg.errors.CheckViolation):
+        _profile_entry(connection, person_id, status="unknown")
+
+
+def test_an_action_button_needs_its_target(connection: psycopg.Connection) -> None:
+    person_id, conversation_id, turn_id = _seed(connection)
+    message = connection.execute(
+        """
+        INSERT INTO message (person_id, conversation_id, turn_id, role, text, occurred_at,
+            person_tz, trust, source_event_ids, created_at)
+        VALUES (%s, %s, %s, 'assistant', 'x', %s, 'Asia/Jakarta', 'assistant', '{}', %s)
+        RETURNING id
+        """,
+        (person_id, conversation_id, turn_id, NOW, NOW),
+    ).fetchone()
+    assert message is not None
+    outbox = connection.execute(
+        """
+        INSERT INTO outbox (person_id, turn_id, message_id, channel, external_chat_id,
+            chunk_index, kind, text, status, created_at)
+        VALUES (%s, %s, %s, 'telegram', '1', 0, 'rich', 'x', 'pending', %s) RETURNING id
+        """,
+        (person_id, turn_id, message[0], NOW),
+    ).fetchone()
+    assert outbox is not None
+    insert = (
+        "INSERT INTO reply_button (person_id, turn_id, outbox_id, token, label, position,"
+        " created_at, action, target_id) VALUES (%s, %s, %s, %s, 'Save', 0, %s, %s, %s)"
+    )
+    connection.execute(insert, (person_id, turn_id, outbox[0], "b:1", NOW, "intro_save", person_id))
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        connection.execute(insert, (person_id, turn_id, outbox[0], "b:2", NOW, "intro_save", None))
+    with pytest.raises(psycopg.errors.CheckViolation):
+        connection.execute(insert, (person_id, turn_id, outbox[0], "b:3", NOW, "dance", 1))
+
+
+def test_only_the_bot_name_is_sent_without_a_turn(connection: psycopg.Connection) -> None:
+    person_id, _, _ = _seed(connection)
+    insert = (
+        "INSERT INTO outbox (person_id, channel, external_chat_id, chunk_index, kind, text,"
+        " status, created_at) VALUES (%s, 'telegram', '1', 0, %s, 'Nara', 'pending', %s)"
+    )
+    connection.execute(insert, (person_id, "bot_name", NOW))
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        connection.execute(insert, (person_id, "rich", NOW))
+
+
+def test_an_introduction_in_progress_has_a_start(connection: psycopg.Connection) -> None:
+    person_id, _, _ = _seed(connection)
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        connection.execute(
+            "INSERT INTO introduction (person_id, state, updated_at) VALUES (%s, 'active', %s)",
+            (person_id, NOW),
+        )
+    with pytest.raises(psycopg.errors.CheckViolation):
+        connection.execute(
+            "INSERT INTO introduction (person_id, state, updated_at) VALUES (%s, 'completed', %s)",
+            (person_id, NOW),
+        )
