@@ -77,6 +77,11 @@ def test_values_are_normalised_and_checked() -> None:
     assert normalise("address", "  Sam \n ") == "Sam"
     assert normalise("timezone", "Asia/Tokyo") == "Asia/Tokyo"
     assert normalise("timezone", "Tokyo time") is None
+    assert normalise("timezone", "Asia/Tokyo (this week)") == "Asia/Tokyo"
+    assert normalise("timezone", "America/Argentina/Buenos_Aires") == (
+        "America/Argentina/Buenos_Aires"
+    )
+    assert normalise("timezone", "Mars/Olympus_Mons") is None
     assert normalise("assistant_name", "x" * 65) is None
     assert normalise("work", "") is None
     assert normalise("favourite_colour", "blue") is None

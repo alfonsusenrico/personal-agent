@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # Display and question order: names first, then how to talk, then the basics.
@@ -29,6 +30,9 @@ LABELS = {
 MAX_VALUE_CHARS = 300
 # The Telegram bot name limit (setMyName).
 MAX_NAME_CHARS = 64
+# An IANA name inside a longer value: the model sometimes adds a note such as
+# "Asia/Tokyo (this week)".
+_ZONE_NAME = re.compile(r"[A-Za-z_]+(?:/[A-Za-z0-9_+-]+)+")
 
 
 def normalise(field: str, value: str) -> str | None:
@@ -39,8 +43,8 @@ def normalise(field: str, value: str) -> str | None:
     limit = MAX_NAME_CHARS if field == "assistant_name" else MAX_VALUE_CHARS
     if not text or len(text) > limit:
         return None
-    if field == "timezone" and not _is_timezone(text):
-        return None
+    if field == "timezone":
+        return next((name for name in _ZONE_NAME.findall(text) if _is_timezone(name)), None)
     return text
 
 
