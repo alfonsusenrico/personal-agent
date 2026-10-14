@@ -96,7 +96,7 @@ Table `introduction`: `person_id` (primary key), `state` (`offered`,
   starts a review: drafts are prefilled from the active profile and topics
   without a value stay skipped, so the summary comes at once and a stated
   change shows an updated summary to save. In the live check, re-entering
-  question mode for a skipped topic held "call me Enrico again" as an
+  question mode for a skipped topic held "call me Sam again" as an
   unsaved answer with no Save in sight; a skipped topic can still be filled
   later by stating it in chat (a proposal with Confirm).
 - **Later:** state `declined`; never offered again.
