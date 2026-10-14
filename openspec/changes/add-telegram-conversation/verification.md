@@ -1,7 +1,8 @@
 # Verification: add-telegram-conversation
 
 Status: the plain-text version and the Telegram output (tasks 5.1-5.7, 6.3)
-are verified locally. The live Telegram check with the owner (6.1) is pending.
+are verified locally. The live Telegram check with the owner (6.1) passed on
+the desktop client; the items under "Not verified yet" were not done live.
 
 Branch `feat/telegram-conversation`, working tree on top of `main` at
 `7ef1199`, 2026-10-13. Local only: macOS host, Docker Compose, Postgres 16
@@ -132,7 +133,7 @@ Formatting choices in the paid run (medium):
 - Prompt caching now works: the guide makes the stable prefix longer than the
   provider's minimum (for example 1,474 of 1,670 input tokens cached).
 
-## Live Telegram check (task 6.1, in progress)
+## Live Telegram check (task 6.1)
 
 Owner's desktop client, real model, 2026-10-13.
 
@@ -188,18 +189,42 @@ Owner's desktop client, real model, 2026-10-13.
   draft also showed "(10^{-43})" as raw text; three paid samples of the same
   question (`science-detail`, USD 0.001916) did not reproduce it, so nothing
   was changed for it.
+- Restart while a reply is pending (2026-10-14): a script restarted the
+  worker 3 seconds after the owner's long question arrived, while the gateway
+  was still writing the answer.
+  - First run (turn 19), defect: the restarted worker resubmitted the same
+    call ID and the gateway answered `call_in_progress`. The client gave up
+    after its few retries and the turn failed with the apology. The gateway
+    finished the call, so it was paid once and its answer was discarded.
+    Fixed in `e3b858b`: while the gateway answers `call_in_progress`,
+    `run_call` resubmits the same ID every 5 seconds for up to 300 seconds,
+    and the row a shutdown recorded as `stopped` takes the replayed outcome
+    (`test_restart_while_the_gateway_still_runs_the_call_waits_for_it`,
+    `test_a_call_that_never_finishes_is_given_up_with_the_apology`; both
+    failed before the fix with the live log lines).
+  - Rerun on `e3b858b` (turn 20), passed: the restarted worker waited 5
+    seconds, took the replay (`replayed=True`), and sent one complete rich
+    reply. One `model_call` row (completed, replayed, USD 0.000715) and one
+    gateway call (completed): no second charge.
+- Offline period (turn 21), passed: with the worker stopped, the owner sent a
+  message at 09.28.04 WIB. It was received at 09.34.09 (waited 6 min 5 s,
+  threshold 5 min), and the reply opened with "sorry for the late reply"
+  before answering (USD 0.000409).
+- Totals after the fourth session: 21 turns (19 answered, 1 failed: turn 19
+  above, 1 stopped), 23 model calls, USD 0.005939, one replay, 21 outbox
+  rows all sent, no plain-text fallback. Log scan of the worker on
+  `e3b858b`: no warning or error.
 - Owner decisions, 2026-10-13: Telegram reply keyboards are not needed now
   (inline quick replies are enough; the question was a test), and a mixed
   English and Indonesian message answered mostly in Indonesian is accepted.
 
 ## Not verified yet
 
-- Task 6.1 on Telegram with the real model needs the owner to send the
-  messages. It also verifies what fakes cannot: rich-message rendering on
-  the owner's phone and desktop, the six effect IDs, drafts and Stop, and
-  button and poll round trips. The plain-text part: burst, mid-turn follow-up, edits, voice note and photo, a
-  forward, a restart while a reply is pending, an offline period, and
-  English, Indonesian, and mixed messages. Its results, per-turn cost, and a
-  log scan will be added here.
+- Parts of task 6.1 not done live (covered only by tests and paid scripted
+  runs): the owner's phone (all live checks so far were on the desktop
+  client), a voice note, a forwarded message, an edit before the answer, a
+  follow-up while a draft is visible, a repeated quick-reply press, the five
+  effects other than celebrate, and image URLs from the chat and invented
+  ones.
 - Long-running behaviour (days of use, the window growing to its budget) and
   laptop sleep during a call.
