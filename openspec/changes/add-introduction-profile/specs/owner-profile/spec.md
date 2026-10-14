@@ -1,93 +1,91 @@
 ## Purpose
 
 What the assistant knows about how the owner wants to be treated (names,
-language, reply style, timezone, and a few basics), how it is learned in an
-introduction and through confirmed changes, and how it shapes every reply.
+language, reply style, timezone, and a few basics), how it learns it
+gradually inside normal conversation, and how it shapes every reply.
 
 ## ADDED Requirements
 
-### Requirement: The introduction is offered once
+### Requirement: Getting to know the owner never interrupts the conversation
 
-The assistant SHALL offer the introduction once, after answering the owner's
-first message when no introduction has been offered, with Start and Later
-buttons. After Later it SHALL NOT offer it again. The owner SHALL be able to
-start or resume it at any time with `/start`.
+Every reply SHALL first respond to what the owner said and follow a change of
+topic. The assistant MAY ask about one thing it does not know yet, only at a
+natural point and only when pacing allows: at most one such question every
+six owner turns, at most two attempts per topic, and none for a topic the
+owner declined.
 
-#### Scenario: First message after the change
+#### Scenario: Topic jump
 
-- **WHEN** the owner writes "morning!" and no introduction was offered before
-- **THEN** the assistant answers and offers the introduction with Start and
-  Later buttons
+- **WHEN** the assistant asked about the owner's routine and the owner replies
+  "how long should I boil an egg?"
+- **THEN** the reply answers the egg question and does not return to the
+  routine
 
-#### Scenario: Later
+#### Scenario: Declined topic
 
-- **WHEN** the owner presses Later
-- **THEN** the introduction is not offered again, and `/start` still begins it
+- **WHEN** the owner answers a question about their routine with "not now"
+- **THEN** the assistant does not ask about the routine again unless the owner
+  brings it up
 
-### Requirement: The introduction asks one topic at a time
+#### Scenario: Pacing
 
-The introduction SHALL cover what to call the owner, the assistant's name,
-language, reply style, work or study, daily routine, interests, and a
-confirmation of the timezone, asking one question at a time. Every question
-SHALL be skippable, and a stopped introduction SHALL resume with its
-remaining topics.
+- **WHEN** the assistant asked a getting-to-know question in the owner's
+  previous turn
+- **THEN** the next five replies ask no getting-to-know question
 
-#### Scenario: Skipped topic
+### Requirement: /start asks the open questions now
 
-- **WHEN** the owner answers "skip" to the interests question
-- **THEN** the assistant moves to the next topic and stores nothing for
-  interests
+`/start` SHALL make the assistant ask about the topics it does not know yet,
+one per reply, while the owner keeps answering. When the owner moves to
+something else, the assistant SHALL follow them and stop asking.
 
-#### Scenario: Resume
+#### Scenario: Asking now
 
-- **WHEN** the owner stops after three answers and later sends `/start`
-- **THEN** the introduction continues with the remaining topics and keeps the
-  three answers
+- **WHEN** the owner sends `/start` and the routine and interests are unknown
+- **THEN** the reply asks about one of them, and the next reply asks about the
+  other if the owner answered
 
-### Requirement: Nothing from the introduction counts before Save
+#### Scenario: Moving on
 
-The introduction SHALL end with a summary of exactly the values that will be
-stored, with Save and Edit buttons. Its values SHALL NOT shape replies or be
-stored as active until the owner presses Save.
+- **WHEN** the owner answers a `/start` question with an unrelated request
+- **THEN** the assistant handles the request and asks nothing further
 
-#### Scenario: Save
+### Requirement: What the owner states is saved at once with Undo
 
-- **WHEN** the owner presses Save on the summary
-- **THEN** every listed value becomes active and later replies use them
+A value the owner states directly about themselves or about how the assistant
+should behave SHALL be saved immediately and shown under the reply as the
+stored value with an Undo button. Undo SHALL restore the previous value, or
+none. The assistant SHALL NOT save what others call the owner, requests about
+other people, or guesses.
 
-#### Scenario: Edit
+#### Scenario: Stated name
 
-- **WHEN** the owner presses Edit and says "call me Sam instead"
-- **THEN** a new summary lists Sam, and nothing is active until Save
+- **WHEN** the owner writes "call me Sam from now on"
+- **THEN** the reply uses Sam, shows "What to call you → Sam" with Undo, and
+  later replies use Sam
 
-### Requirement: Stated changes need one confirmation
+#### Scenario: Undo
 
-Outside the introduction, a change the owner states directly SHALL be offered
-with Confirm and Cancel buttons and stored only on Confirm. The assistant
-SHALL NOT propose a change from something the owner did not state about
-themselves or about how it should behave.
-
-#### Scenario: Confirmed change
-
-- **WHEN** the owner writes "call me Sam from now on" and presses Confirm
-- **THEN** the address becomes Sam and replies use it
+- **WHEN** the owner presses Undo under "What to call you → Sam" and the
+  earlier value was Samuel
+- **THEN** the stored value is Samuel again
 
 #### Scenario: Incidental mention
 
 - **WHEN** the owner writes "my friend calls me Bob"
-- **THEN** no change is proposed
+- **THEN** nothing is saved
 
 #### Scenario: Timezone change
 
-- **WHEN** the owner writes "I'm in Tokyo this week" and confirms
-  Asia/Tokyo
-- **THEN** times in replies and stamps on new messages use Asia/Tokyo
+- **WHEN** the owner writes "I'm in Tokyo this week"
+- **THEN** Asia/Tokyo is saved with Undo, and times in replies and stamps on
+  new messages use it
 
 ### Requirement: Changes keep history and removals forget
 
-Confirming a new value SHALL keep the previous value as dated history.
-Removing an entry SHALL delete it and every earlier version of it; the raw
-messages it came from SHALL stay in the message log.
+Saving a new value SHALL keep the previous value as dated history. Removing an
+entry SHALL delete it and every earlier version of it; the raw messages it
+came from SHALL stay in the message log.
 
 #### Scenario: Change
 
@@ -142,5 +140,5 @@ owner's own chat.
 
 #### Scenario: Logs
 
-- **WHEN** an entry is saved, changed, or removed
+- **WHEN** an entry is saved, undone, or removed
 - **THEN** the log records the field and the action, never the value

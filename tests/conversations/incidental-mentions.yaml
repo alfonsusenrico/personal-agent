@@ -1,0 +1,19 @@
+name: incidental-mentions
+description: Things about other people or requests for others never propose a profile change.
+steps:
+  - send: "haha my friend always calls me Bob"
+  - settle: true
+  - wait: 30
+  - send: "can you help me reply to my mom in Indonesian? she asked when I'm coming home, I'll be back Sunday"
+  - settle: true
+  - wait: 30
+  - send: "my brother works as a nurse and wakes up at 4am, crazy"
+  - settle: true
+  - wait: 30
+  - send: "what's a good routine for a beginner runner?"
+  - settle: true
+  - wait: 30
+  - send: "write the next answer formally, it's for my boss: can we move the meeting to 3pm?"
+expect:
+  questions_at_most: 1
+  profile_absent: [address, language, work, routine, reply_style]

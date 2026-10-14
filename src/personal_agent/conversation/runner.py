@@ -7,7 +7,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Protocol
 
@@ -23,6 +23,9 @@ from personal_agent.conversation.context import (
 from personal_agent.conversation.models import GenerationPlan, TurnInput
 from personal_agent.conversation.store import OutgoingItem, TurnOutcome
 from personal_agent.gateway.calls import CallOutcome, CallRequest, Responses, run_call
+from personal_agent.profile import store as profile_store
+from personal_agent.profile.apply import apply_reply, with_buttons
+from personal_agent.profile.render import PROFILE_SHOWN, profile_text, remove_buttons
 from personal_agent.telegram.render import split_reply
 from personal_agent.telegram.rich import RenderedReply, render_reply
 
@@ -61,6 +64,12 @@ class _Commit:
     items: list[OutgoingItem]
     model_call_id: int | None = None
     failure_code: str | None = None
+    # The rendered reply, so its profile marks are applied in the commit transaction.
+    rendered: RenderedReply | None = None
+
+
+def _apology(failure_code: str) -> _Commit:
+    return _Commit("failed", notices.APOLOGY, _notice(notices.APOLOGY), failure_code=failure_code)
 
 
 def _notice(text: str) -> list[OutgoingItem]:
@@ -129,6 +138,9 @@ class TurnRunner:
         if isinstance(began, datetime):
             return max(0.05, (began - now).total_seconds())
         plan = began
+        if plan.command is not None:
+            await self._answer_command(plan)
+            return 0.0
         async with self._pool.connection() as connection:
             turn_input = await store.load_turn_input(
                 connection,
@@ -154,6 +166,16 @@ class TurnRunner:
                 return 0.0
             else:
                 commit = self._commit_for(outcome, turn_input)
+                if commit.rendered is not None:
+                    items = await apply_reply(
+                        connection,
+                        plan,
+                        turn_input,
+                        commit.rendered,
+                        commit.items,
+                        now=self._clock(),
+                    )
+                    commit = replace(commit, items=items) if items else _apology("empty_output")
             await store.commit_turn(
                 connection,
                 plan,
@@ -239,17 +261,48 @@ class TurnRunner:
             rendered = render_reply(outcome.text, shared_urls=shared_urls(owner_texts))
             if rendered.dropped:
                 logger.info("Reply parts removed: %s", rendered.dropped)
-            if rendered.sends_anything:
+            if rendered.sends_anything or rendered.profile:
                 return _Commit(
                     "answered",
                     rendered.stored,
                     _items(rendered),
                     model_call_id=outcome.model_call_id,
+                    rendered=rendered,
                 )
-            failure = "empty_output"
-        else:
-            failure = outcome.error_code or "failed"
-        return _Commit("failed", notices.APOLOGY, _notice(notices.APOLOGY), failure_code=failure)
+            return _apology("empty_output")
+        return _apology(outcome.error_code or "failed")
+
+    async def _answer_command(self, plan: GenerationPlan) -> None:
+        """Answer a command from stored data, without a model call."""
+        async with self._pool.connection() as connection, connection.transaction():
+            if await store.lock_open_turn(connection, plan) == "closed":
+                return
+            turn_input = await store.load_turn_input(
+                connection,
+                plan,
+                default_timezone=self._config.default_timezone,
+                window_limit=1,
+            )
+            active = await profile_store.active(connection, plan.person_id)
+            text = profile_text(active, turn_input.person_tz)
+            items = (
+                with_buttons([], text, remove_buttons(active))
+                if active
+                else [OutgoingItem("rich", text)]
+            )
+            await store.commit_turn(
+                connection,
+                plan,
+                outcome="answered",
+                assistant_text=PROFILE_SHOWN,
+                items=items,
+                model_call_id=None,
+                failure_code=None,
+                person_tz=turn_input.person_tz,
+                now=self._clock(),
+            )
+        logger.info("Turn %d answered: command %s", plan.turn_id, plan.command)
+        self._on_answer()
 
     async def run_forever(self, wakeup: asyncio.Event) -> None:
         while True:

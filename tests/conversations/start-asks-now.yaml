@@ -1,0 +1,32 @@
+name: start-asks-now
+description: /start asks open topics one per reply until the owner moves on.
+seed_profile:
+  address: Sam
+  assistant_name: Nara
+  language: English
+  timezone: Asia/Jakarta
+steps:
+  - send: "/start"
+  - settle: true
+  - wait: 20
+  - send: "short and casual please"
+  - settle: true
+  - wait: 20
+  - send: "I'm a software engineer"
+  - settle: true
+  - wait: 20
+  - send: "actually, can you convert 5 miles to km?"
+  - settle: true
+  - wait: 20
+  - send: "thanks"
+fake_replies:
+  - "Sure! How do you like my replies?<pa-ask field=\"reply_style\"/>"
+  - "Short and casual it is. What do you do for work?<pa-profile field=\"reply_style\">Short and casual</pa-profile><pa-ask field=\"work\"/>"
+  - "Nice. What does your usual day look like?<pa-profile field=\"work\">Software engineer</pa-profile><pa-ask field=\"routine\"/>"
+  - "5 miles is about 8 km."
+  - "<pa-react emoji=\"👍\"/>"
+expect:
+  profile_active:
+    reply_style: short
+    work: engineer
+  context_contains: ["The owner asked you (with /start) to get to know them now"]

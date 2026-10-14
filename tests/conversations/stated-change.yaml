@@ -1,0 +1,20 @@
+name: stated-change
+description: A stated change is saved at once with Undo; Undo restores the earlier value.
+seed_profile:
+  address: Samuel
+steps:
+  - send: "call me Sam from now on"
+  - press: "Undo"
+  - wait: 60
+  - send: "actually yes, call me Sam"
+  - settle: true
+  - wait: 60
+  - send: "thanks"
+fake_replies:
+  - "Got it, Sam.<pa-profile field=\"address\">Sam</pa-profile>"
+  - "Sure, Sam.<pa-profile field=\"address\">Sam</pa-profile>"
+  - "<pa-react emoji=\"👍\"/>"
+expect:
+  profile_active:
+    address: Sam
+  instructions_contains: ["- Call the owner: Sam"]

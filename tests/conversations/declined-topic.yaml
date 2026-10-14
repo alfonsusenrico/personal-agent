@@ -1,0 +1,26 @@
+name: declined-topic
+description: A waved-off question is recorded and not asked again.
+seed_profile:
+  address: Sam
+  assistant_name: Nara
+  language: English
+  reply_style: Short and casual
+  timezone: Asia/Jakarta
+  work: Software engineer
+  interests: Cycling
+steps:
+  - send: "hey, I'm back"
+  - settle: true
+  - wait: 30
+  - send: "not now"
+  - settle: true
+  - wait: 30
+  - send: "anyway, good night"
+fake_replies:
+  - "Welcome back, Sam! What does your usual day look like?<pa-ask field=\"routine\"/>"
+  - "No problem.<pa-profile field=\"routine\" skip=\"true\"/>"
+  - "Good night, Sam!"
+expect:
+  questions_at_most: 1
+  profile_absent: [routine]
+  context_contains: ["You don't know yet: Daily routine (routine)"]

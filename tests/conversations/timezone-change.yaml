@@ -1,0 +1,14 @@
+name: timezone-change
+description: A stated timezone is saved at once and moves the owner's local time.
+steps:
+  - send: "I'm in Tokyo this week, use Tokyo time for me"
+  - settle: true
+  - wait: 60
+  - send: "what time is it for me now?"
+fake_replies:
+  - "Switching to Tokyo time.<pa-profile field=\"timezone\">Asia/Tokyo</pa-profile>"
+  - "It's evening in Tokyo."
+expect:
+  profile_active:
+    timezone: Asia/Tokyo
+  context_contains: ["(Asia/Tokyo, UTC+09:00)"]

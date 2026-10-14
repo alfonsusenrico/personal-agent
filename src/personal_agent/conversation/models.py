@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
+
+from personal_agent.profile.render import ProfileState
 
 Role = Literal["user", "assistant"]
 
@@ -12,7 +14,7 @@ Role = Literal["user", "assistant"]
 @dataclass(frozen=True, slots=True)
 class EventRow:
     id: int
-    kind: Literal["message", "edit", "unsupported", "button", "poll_answer", "stop"]
+    kind: Literal["message", "edit", "unsupported", "button", "poll_answer", "stop", "command"]
     modality: str
     occurred_at: datetime
     trust: Literal["owner_direct", "owner_forwarded"]
@@ -51,6 +53,8 @@ class GenerationPlan:
     # The Telegram draft of this generation, so a Stop press finds its turn.
     draft_id: int = 1
     stop_requested: bool = False
+    # A command answered by code without a model call, such as "profile".
+    command: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,3 +65,4 @@ class TurnInput:
     events: list[EventRow]
     # Earlier messages, oldest first.
     window: list[MessageRow]
+    profile: ProfileState = field(default_factory=ProfileState)

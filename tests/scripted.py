@@ -1,7 +1,8 @@
 """Synthetic conversation scripts (tests/conversations/*.yaml).
 
 A script lists what the owner does (messages, edits, media, forwards, waits, a
-message sent while the assistant is thinking) and the structural outcome expected.
+message sent while the assistant is thinking, button presses) and the structural
+outcome expected. `seed_profile` starts with a saved profile.
 The same scripts run free in the test suite against a fake gateway and, through
 `scripts/converse`, against the real gateway for a transcript the owner reviews.
 """
@@ -20,6 +21,8 @@ from psycopg_pool import AsyncConnectionPool
 
 from personal_agent.gateway.calls import Responses
 from tests.fakes import (
+    OWNER_ID,
+    START,
     FakeTelegramServer,
     button_press,
     message_update,
@@ -40,6 +43,11 @@ _EXPECTATION_KEYS = frozenset(
         "user_contains",
         "user_excludes",
         "turn_statuses",
+        "profile_active",
+        "profile_absent",
+        "questions_at_most",
+        "bot_names",
+        "instructions_contains",
     }
 )
 # Checked only in the free run, where the replies come from `fake_replies`.
@@ -103,6 +111,7 @@ class ScriptRun:
     replies: list[str] = field(default_factory=list)
     sent_methods: list[str] = field(default_factory=list)
     model_calls: list[dict[str, Any]] = field(default_factory=list)
+    bot_names: list[str] = field(default_factory=list)
 
 
 def load_script(path: Path) -> dict[str, Any]:
@@ -247,6 +256,8 @@ async def run_script(
     replies then come from the script's `fake_replies`."""
     run = ScriptRun(name=script["name"], description=script.get("description", ""))
     agent.responses.agent = agent
+    if script.get("seed_profile"):
+        await _seed_profile(pool, script["seed_profile"])
     updates = _Updates(agent, pool)
     for step in script["steps"]:
         if "wait" in step:
@@ -285,6 +296,7 @@ async def run_script(
     run.replies = [describe_sent(item) for item in agent.server.sent]
     run.sent_methods = [item["method"] for item in agent.server.sent]
     run.model_calls = await _model_calls(pool)
+    run.bot_names = list(agent.server.bot_names)
     run.failures += await _check(script.get("expect") or {}, run, pool)
     if fake:
         run.failures += _check_sent(script.get("expect_fake") or {}, run)
@@ -303,6 +315,44 @@ def _check_sent(expect: dict[str, Any], run: ScriptRun) -> list[str]:
     ]
     failures += [f"sent has {text!r}" for text in expect.get("sent_excludes", []) if text in sent]
     return failures
+
+
+async def _seed_profile(pool: AsyncConnectionPool, values: dict[str, str]) -> None:
+    """The owner with these saved values."""
+    async with pool.connection() as connection, connection.transaction():
+        cursor = await connection.execute(
+            "INSERT INTO person (created_at) VALUES (%s) RETURNING id", (START,)
+        )
+        row = await cursor.fetchone()
+        assert row is not None
+        person_id = row[0]
+        await connection.execute(
+            "INSERT INTO identity (person_id, channel, external_id, created_at) "
+            "VALUES (%s, 'telegram', %s, %s)",
+            (person_id, str(OWNER_ID), START),
+        )
+        await connection.execute(
+            "INSERT INTO conversation (person_id, kind, created_at) VALUES (%s, 'main', %s)",
+            (person_id, START),
+        )
+        for name, value in values.items():
+            await connection.execute(
+                "INSERT INTO profile_entry (person_id, field, value, status, source_event_ids, "
+                "saved_at) VALUES (%s, %s, %s, 'active', '{}', %s)",
+                (person_id, name, value, START),
+            )
+
+
+async def _profile_rows(pool: AsyncConnectionPool) -> tuple[dict[str, str], int]:
+    """The saved values and how many getting-to-know questions were asked."""
+    async with pool.connection() as connection:
+        cursor = await connection.execute(
+            "SELECT field, value FROM profile_entry WHERE status = 'active'"
+        )
+        active = {row[0]: row[1] for row in await cursor.fetchall()}
+        cursor = await connection.execute("SELECT coalesce(sum(asks), 0) FROM profile_topic")
+        row = await cursor.fetchone()
+    return active, int(row[0]) if row else 0
 
 
 async def _model_calls(pool: AsyncConnectionPool) -> list[dict[str, Any]]:
@@ -338,6 +388,20 @@ async def _check(expect: dict[str, Any], run: ScriptRun, pool: AsyncConnectionPo
         if key in expect and expect[key] != actual:
             failures.append(f"{key}: expected {expect[key]!r}, got {actual!r}")
 
+    active, questions = await _profile_rows(pool)
+    for name, expected in (expect.get("profile_active") or {}).items():
+        if expected.lower() not in active.get(name, "").lower():
+            failures.append(f"profile {name}: expected {expected!r}, got {active.get(name)!r}")
+    failures += [
+        f"profile {name} is saved" for name in expect.get("profile_absent", []) if name in active
+    ]
+    if "questions_at_most" in expect and questions > expect["questions_at_most"]:
+        failures.append(f"questions: at most {expect['questions_at_most']}, got {questions}")
+    compare("bot_names", run.bot_names)
+    instructions = run.calls[-1].body.get("instructions", "") if run.calls else ""
+    for text in expect.get("instructions_contains", []):
+        if text not in instructions:
+            failures.append(f"instructions lack {text!r}")
     compare("turns", turns)
     compare("model_calls", len(run.model_calls))
     compare("superseded_calls", superseded)

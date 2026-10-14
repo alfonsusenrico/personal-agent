@@ -1,7 +1,7 @@
 """Turn the model's Telegram Rich Markdown into what is sent.
 
 The model writes Telegram Rich Markdown plus the agent's own `pa-` directives
-(reaction, effect, poll). Rendering validates and removes the directives, keeps
+(reaction, effect, poll, profile values, getting-to-know questions). Rendering validates and removes the directives, keeps
 only quick-reply, URL, and copy-text buttons (quick replies get stored tokens in
 place of the model's callback data), and removes media whose URL the owner never
 shared. Nothing here calls Telegram.
@@ -16,6 +16,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from personal_agent.profile.fields import FIELDS, normalise
 from personal_agent.telegram.render import split_reply
 
 # Telegram allows 32,768 characters per rich message; the margin covers how
@@ -132,6 +133,8 @@ _REACT = re.compile(r"<pa-react\b([^>]*?)/?>(?:\s*</pa-react>)?")
 _EFFECT = re.compile(r"<pa-effect\b([^>]*?)/?>(?:\s*</pa-effect>)?")
 _POLL = re.compile(r"<pa-poll\b([^>]*)>(.*?)</pa-poll>", re.DOTALL)
 _POLL_OPTION = re.compile(r"<option>(.*?)</option>", re.DOTALL)
+_PROFILE = re.compile(r"<pa-profile\b([^>]*?)(?:/>|>(.*?)</pa-profile>)", re.DOTALL)
+_ASK = re.compile(r"<pa-ask\b([^>]*?)/?>(?:\s*</pa-ask>)?")
 _LEFTOVER_DIRECTIVE = re.compile(r"</?pa-[a-z-]*\b[^>]*>")
 # The lookahead keeps <tg-button-row> from matching as a button.
 _BUTTON = re.compile(r"<tg-button(?=[\s>])([^>]*)>(.*?)</tg-button>", re.DOTALL)
@@ -148,6 +151,9 @@ class QuickReply:
     token: str
     label: str
     position: int
+    # Set for buttons handled by code (confirm, save, remove) instead of the model.
+    action: str | None = None
+    target_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +161,14 @@ class PollSpec:
     question: str
     options: list[str]
     multiple: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileMark:
+    """A profile value the reply marked; None when the owner skipped the topic."""
+
+    field: str
+    value: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +183,9 @@ class RenderedReply:
     quick_replies: list[QuickReply]
     # Counts of removed parts by reason, for content-free logs.
     dropped: dict[str, int] = field(default_factory=dict)
+    profile: list[ProfileMark] = field(default_factory=list)
+    # Profile topics this reply asks the owner about.
+    asks: list[str] = field(default_factory=list)
 
     @property
     def sends_anything(self) -> bool:
@@ -195,6 +212,8 @@ def render_reply(
 ) -> RenderedReply:
     dropped: Counter[str] = Counter()
     reaction, effect, poll = None, None, None
+    profile: list[ProfileMark] = []
+    asks: list[str] = []
     # Valid directives are parked behind placeholders while unknown ones are removed.
     kept: list[str] = []
 
@@ -237,7 +256,33 @@ def render_reply(
         poll = PollSpec(question, options, attributes.get("multiple", "false") == "true")
         return keep(match.group(0))
 
-    stored = _REACT.sub(take_reaction, text)
+    def take_profile(match: re.Match[str]) -> str:
+        attributes = _attributes(match.group(1))
+        name = attributes.get("field", "")
+        if any(mark.field == name for mark in profile):
+            dropped["profile"] += 1
+            return ""
+        if attributes.get("skip") == "true" and name in FIELDS:
+            profile.append(ProfileMark(name, None))
+            return keep(f'<pa-profile field="{name}" skip="true"/>')
+        value = normalise(name, html.unescape(_TAG.sub("", match.group(2) or "")))
+        if value is None:
+            dropped["profile"] += 1
+            return ""
+        profile.append(ProfileMark(name, value))
+        return keep(f'<pa-profile field="{name}">{html.escape(value, quote=False)}</pa-profile>')
+
+    def take_ask(match: re.Match[str]) -> str:
+        name = _attributes(match.group(1)).get("field", "")
+        if name not in FIELDS or name in asks:
+            dropped["ask"] += 1
+            return ""
+        asks.append(name)
+        return keep(f'<pa-ask field="{name}"/>')
+
+    stored = _PROFILE.sub(take_profile, text)
+    stored = _ASK.sub(take_ask, stored)
+    stored = _REACT.sub(take_reaction, stored)
     stored = _EFFECT.sub(take_effect, stored)
     stored = _POLL.sub(take_poll, stored)
     leftovers = _LEFTOVER_DIRECTIVE.findall(stored)
@@ -310,6 +355,8 @@ def render_reply(
         poll=poll,
         quick_replies=quick_replies,
         dropped=dict(dropped),
+        profile=profile,
+        asks=asks,
     )
 
 
@@ -321,6 +368,7 @@ def _is_shared(url: str, shared_urls: set[str]) -> bool:
 
 
 def _strip_complete_directives(text: str) -> str:
+    text = _ASK.sub("", _PROFILE.sub("", text))
     return _POLL.sub("", _EFFECT.sub("", _REACT.sub("", text)))
 
 

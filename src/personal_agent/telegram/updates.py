@@ -6,6 +6,8 @@ because a stranger's message is their personal data.
 
 Some Telegram clients send a Stop press as a typed /stop command instead of a
 stopped_message_generation update, so /stop is a Stop press too, never a message.
+/profile is a command answered by code; /start is a message that also asks the
+assistant to get to know the owner now.
 """
 
 from __future__ import annotations
@@ -39,8 +41,9 @@ _UNREADABLE_CONTENT = (
 )
 
 _STOP_COMMAND = re.compile(r"/stop(@[A-Za-z0-9_]+)?")
+_PROFILE_COMMAND = re.compile(r"/profile(@[A-Za-z0-9_]+)?")
 
-EventKind = Literal["message", "edit", "unsupported", "button", "poll_answer", "stop"]
+EventKind = Literal["message", "edit", "unsupported", "button", "poll_answer", "stop", "command"]
 Trust = Literal["owner_direct", "owner_forwarded"]
 
 
@@ -171,6 +174,17 @@ def parse_update(
             message_id=message.message_id,
             occurred_at=datetime.fromtimestamp(message.date, UTC),
             text=message.text,
+        )
+    if not is_edit and message.text and _PROFILE_COMMAND.fullmatch(message.text.strip()):
+        return _control_envelope(
+            parsed.update_id,
+            user_id=message.sender.id,
+            kind="command",
+            now=now,
+            raw=update,
+            message_id=message.message_id,
+            occurred_at=datetime.fromtimestamp(message.date, UTC),
+            text="/profile",
         )
     modality = _modality(update["edited_message" if is_edit else "message"])
     if is_edit:

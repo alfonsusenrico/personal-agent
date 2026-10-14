@@ -10,6 +10,8 @@ from personal_agent.conversation.context import (
     select_window,
 )
 from personal_agent.conversation.models import EventRow, GenerationPlan, MessageRow, TurnInput
+from personal_agent.profile.render import ProfileState, context_lines, open_topics
+from personal_agent.profile.store import Entry, Topic
 from tests.fakes import START
 
 
@@ -126,6 +128,53 @@ def test_instructions_are_the_persona_then_the_telegram_guide() -> None:
     assert "Plain text only" not in instructions
 
 
+def _entry(field: str, value: str) -> Entry:
+    return Entry(1, field, value, START, 1)
+
+
+def test_the_saved_profile_follows_the_guide_and_stays_stable() -> None:
+    active = [_entry("address", "Sam"), _entry("assistant_name", "Nara")]
+
+    instructions = reply_instructions(active)
+
+    assert instructions.startswith(reply_instructions().rstrip())
+    assert instructions.index("# The owner's profile") > instructions.index(
+        "Telegram Rich Markdown"
+    )
+    assert "- Your name: Nara" in instructions and "- Call the owner: Sam" in instructions
+    assert reply_instructions(list(active)) == instructions
+
+
+def test_what_is_unknown_is_shown_only_when_a_question_is_allowed() -> None:
+    open_ = ["routine", "timezone"]
+
+    paced = context_lines(ProfileState(open_topics=open_), tz="Asia/Jakarta")
+    allowed = context_lines(
+        ProfileState(open_topics=open_, question_allowed=True), tz="Asia/Jakarta"
+    )
+    now = context_lines(
+        ProfileState(open_topics=open_, question_allowed=True, asking_now=True), tz="Asia/Jakarta"
+    )
+
+    assert paced == []
+    assert "You don't know yet: Daily routine (routine), Timezone (timezone)." in allowed[0]
+    assert "ask the owner to confirm Asia/Jakarta" in allowed[1]
+    assert "asked you (with /start) to get to know them now" in now[0]
+
+
+def test_the_profile_never_changes_the_instructions_mid_conversation() -> None:
+    plan = GenerationPlan(1, "key", 1, 1, 1, START, 1)
+    profile = ProfileState(open_topics=["routine"], question_allowed=True)
+    turn = TurnInput(plan, "Asia/Jakarta", "1001", [_event(1, "hi")], [], profile)
+
+    request = build_reply_request(
+        turn, window_budget_tokens=6_000, offline_after=timedelta(hours=1)
+    )
+
+    assert request.instructions == reply_instructions()
+    assert "You don't know yet: Daily routine (routine)." in request.input[-2]["content"]
+
+
 def test_button_presses_and_votes_are_answers_not_unreadable_media() -> None:
     rendered = render_turn(
         [
@@ -144,3 +193,15 @@ def test_the_note_gives_unix_time_for_local_time_stamps() -> None:
     )
 
     assert f"Unix time: {int(START.timestamp())}." in request.input[-2]["content"]
+
+
+def test_a_topic_asked_twice_or_declined_is_not_open() -> None:
+    asked = {
+        "routine": Topic(2, START, False),
+        "work": Topic(0, None, True),
+        "interests": Topic(1, START, False),
+    }
+
+    open_ = open_topics([_entry("address", "Sam")], asked)
+
+    assert open_ == ["assistant_name", "language", "reply_style", "timezone", "interests"]

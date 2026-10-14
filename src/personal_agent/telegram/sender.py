@@ -4,8 +4,8 @@ A row is marked `sending` before the request and `sent` after it. Telegram has n
 idempotency key, so a stop between Telegram accepting a message and the `sent`
 update sends that one row again after restart; a lost reply would be worse.
 
-Rows are rich messages (Telegram Rich Markdown), plain messages, reactions, or
-polls. A rich message Telegram rejects is sent once as plain text instead; one
+Rows are rich messages (Telegram Rich Markdown), plain messages, reactions, polls,
+or the bot's own name. A rich message Telegram rejects is sent once as plain text instead; one
 rejected for its effect is sent again without the effect.
 """
 
@@ -92,6 +92,9 @@ class Sender:
                     """,
                     (message_id, self._clock(), fallback, row["id"]),
                 )
+            if row["turn_id"] is None:
+                logger.info("Outbox %d %s sent", row["id"], row["kind"])
+                continue
             logger.info(
                 "Turn %d %s item %d sent%s",
                 row["turn_id"],
@@ -108,6 +111,9 @@ class Sender:
             await self._telegram.set_reaction(
                 chat_id=chat_id, message_id=payload["target_message_id"], emoji=payload["emoji"]
             )
+            return None, False
+        if row["kind"] == "bot_name":
+            await self._telegram.set_my_name(name=row["text"])
             return None, False
         if row["kind"] == "poll":
             return await self._send_poll(row["id"], chat_id), False

@@ -179,6 +179,23 @@ class TelegramApi:
             payload["text"] = text
         await self._call("answerCallbackQuery", payload)
 
+    async def set_my_name(self, *, name: str) -> None:
+        """Rename the bot for every user (no language code)."""
+        await self._call("setMyName", {"name": name})
+
+    async def get_my_commands(self) -> list[dict[str, str]]:
+        result = await self._call("getMyCommands", {})
+        if not isinstance(result, list):
+            raise TelegramError("unexpected_result")
+        return [
+            {"command": str(item.get("command")), "description": str(item.get("description"))}
+            for item in result
+            if isinstance(item, dict)
+        ]
+
+    async def set_my_commands(self, commands: list[dict[str, str]]) -> None:
+        await self._call("setMyCommands", {"commands": commands})
+
     async def set_reaction(self, *, chat_id: str, message_id: str, emoji: str) -> None:
         await self._call(
             "setMessageReaction",

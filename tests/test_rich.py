@@ -6,6 +6,7 @@ from personal_agent.telegram.rich import (
     EFFECT_REACTIONS,
     EFFECTS,
     REACTIONS,
+    ProfileMark,
     draft_view,
     mark_chosen,
     render_reply,
@@ -69,6 +70,42 @@ def test_an_effect_without_text_becomes_a_reaction_to_the_owner() -> None:
     assert (both.reaction, both.effect, both.dropped) == ("👍", None, {"effect": 1})
     assert set(EFFECT_REACTIONS) == set(EFFECTS)
     assert set(EFFECT_REACTIONS.values()) <= REACTIONS
+
+
+def test_profile_values_are_validated_and_removed_from_the_message() -> None:
+    rendered = render_reply(
+        "Nice to meet you, Sam!\n"
+        '<pa-profile field="address">  Sam </pa-profile>'
+        '<pa-profile field="address">Samuel</pa-profile>'
+        '<pa-profile field="timezone">Tokyo time</pa-profile>'
+        '<pa-profile field="interests" skip="true"/>'
+        '<pa-profile field="favourite_colour">blue</pa-profile>'
+        '<pa-profile field="assistant_name"><b>Nara</b></pa-profile>',
+        shared_urls=set(),
+    )
+
+    assert rendered.chunks == ["Nice to meet you, Sam!"]
+    assert rendered.profile == [
+        ProfileMark("address", "Sam"),
+        ProfileMark("interests", None),
+        ProfileMark("assistant_name", "Nara"),
+    ]
+    assert rendered.dropped == {"profile": 3}
+    assert '<pa-profile field="address">Sam</pa-profile>' in rendered.stored
+    assert "Samuel" not in rendered.stored
+
+
+def test_questions_are_marked_per_known_topic() -> None:
+    rendered = render_reply(
+        'What does your day look like?<pa-ask field="routine"/><pa-ask field="routine"/>'
+        '<pa-ask field="shoe_size"/>',
+        shared_urls=set(),
+    )
+
+    assert rendered.asks == ["routine"]
+    assert rendered.chunks == ["What does your day look like?"]
+    assert rendered.dropped == {"ask": 2}
+    assert rendered.stored.count('<pa-ask field="routine"/>') == 1
 
 
 def test_poll_is_parsed_and_removed_from_the_message() -> None:
@@ -166,6 +203,9 @@ def test_draft_view_hides_directives_buttons_and_unfinished_markup() -> None:
     )
     assert draft_view("Steps:\n1. Boil water\n2.") == "Steps:\n1. Boil water"
     assert draft_view("It is **very") == "It is"
+    assert draft_view('Hi Sam!<pa-profile field="address">Sam</pa-profile> Next') == "Hi Sam! Next"
+    assert draft_view('Hi Sam!<pa-profile field="address">Sa') == "Hi Sam!"
+    assert draft_view('Your day?<pa-ask field="routine"/>') == "Your day?"
 
 
 def test_mark_chosen_replaces_quick_replies_only() -> None:
