@@ -227,16 +227,19 @@ def test_an_action_button_needs_its_target(connection: psycopg.Connection) -> No
         connection.execute(insert, (person_id, turn_id, outbox[0], "b:3", NOW, "dance", 1))
 
 
-def test_only_the_bot_name_is_sent_without_a_turn(connection: psycopg.Connection) -> None:
+def test_only_the_bot_name_and_acknowledgements_have_no_turn(
+    connection: psycopg.Connection,
+) -> None:
     person_id, _, _ = _seed(connection)
     insert = (
         "INSERT INTO outbox (person_id, channel, external_chat_id, chunk_index, kind, text,"
-        " status, created_at) VALUES (%s, 'telegram', '1', 0, %s, 'Nara', 'pending', %s)"
+        " status, created_at) VALUES (%s, 'telegram', '1', 0, %s, %s, 'pending', %s)"
     )
-    connection.execute(insert, (person_id, "bot_name", NOW))
+    connection.execute(insert, (person_id, "bot_name", "Nara", NOW))
+    connection.execute(insert, (person_id, "reaction", None, NOW))
 
     with pytest.raises(psycopg.errors.CheckViolation):
-        connection.execute(insert, (person_id, "rich", NOW))
+        connection.execute(insert, (person_id, "rich", "Hi", NOW))
 
 
 def test_a_topic_is_counted_once_per_person(connection: psycopg.Connection) -> None:
@@ -251,3 +254,62 @@ def test_a_topic_is_counted_once_per_person(connection: psycopg.Connection) -> N
             "INSERT INTO profile_topic (person_id, field, asks) VALUES (%s, 'work', -1)",
             (person_id,),
         )
+
+
+def _feedback_target(connection: psycopg.Connection) -> tuple[int, int, int]:
+    """A person, an assistant message, and an event to flag it from."""
+    ids = _seed(connection)
+    person_id, conversation_id, turn_id = ids
+    _insert_event(connection, ids, "7")
+    event = connection.execute("SELECT max(id) FROM inbound_event").fetchone()
+    message = connection.execute(
+        """
+        INSERT INTO message (person_id, conversation_id, turn_id, role, text, occurred_at,
+            person_tz, trust, source_event_ids, created_at)
+        VALUES (%s, %s, %s, 'assistant', 'x', %s, 'Asia/Jakarta', 'assistant', '{}', %s)
+        RETURNING id
+        """,
+        (person_id, conversation_id, turn_id, NOW, NOW),
+    ).fetchone()
+    assert event is not None and message is not None
+    return person_id, message[0], event[0]
+
+
+_FEEDBACK = (
+    "INSERT INTO feedback (person_id, message_id, kind, note, source_event_id, created_at,"
+    " withdrawn_at, closed_at, outcome) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+)
+
+
+def test_a_message_has_one_open_dislike(connection: psycopg.Connection) -> None:
+    person_id, message_id, event_id = _feedback_target(connection)
+    row = (person_id, message_id, "dislike", None, event_id, NOW)
+    connection.execute(_FEEDBACK, (*row, NOW, None, None))
+    connection.execute(_FEEDBACK, (*row, None, NOW, "dismissed"))
+    connection.execute(_FEEDBACK, (*row, None, None, None))
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        connection.execute(_FEEDBACK, (*row, None, None, None))
+    connection.execute(
+        _FEEDBACK, (person_id, message_id, "note", "too long", event_id, NOW, None, None, None)
+    )
+
+
+def test_feedback_shape_is_enforced(connection: psycopg.Connection) -> None:
+    person_id, message_id, event_id = _feedback_target(connection)
+    invalid = [
+        ("note", None, None, None),
+        ("dislike", "why", None, None),
+        ("note", "x" * 4097, None, None),
+        ("note", "", None, None),
+        ("dislike", None, NOW, None),
+        ("dislike", None, None, "test"),
+        ("dislike", None, NOW, "later"),
+        ("praise", None, None, None),
+    ]
+    for kind, note, closed_at, outcome in invalid:
+        with pytest.raises(psycopg.errors.CheckViolation):
+            connection.execute(
+                _FEEDBACK,
+                (person_id, message_id, kind, note, event_id, NOW, None, closed_at, outcome),
+            )

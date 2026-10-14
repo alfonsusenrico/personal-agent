@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from personal_agent.telegram.updates import parse_update
-from tests.fakes import OWNER_ID, START, STRANGER_ID, message_update
+from tests.fakes import OWNER_ID, START, STRANGER_ID, message_update, reaction_update
 
 ALLOWED = frozenset({OWNER_ID})
 
@@ -141,3 +141,76 @@ def test_a_stop_command_is_a_stop_press_not_a_message() -> None:
     assert addressed is not None and addressed.kind == "stop"
     assert sentence is not None and sentence.kind == "message"
     assert stranger is None
+
+
+def test_a_thumbs_down_flags_and_removing_it_withdraws() -> None:
+    added = parse_update(reaction_update(40, 900, new=("👎",)), ALLOWED, now=START)
+    removed = parse_update(reaction_update(41, 900, old=("👎",), new=("👍",)), ALLOWED, now=START)
+    other = parse_update(reaction_update(42, 900, new=("❤",)), ALLOWED, now=START)
+    kept = parse_update(reaction_update(43, 900, old=("👎",), new=("👎", "🔥")), ALLOWED, now=START)
+
+    assert added is not None
+    assert (added.kind, added.answerable, added.text) == ("reaction", False, None)
+    assert (added.feedback, added.feedback_target_message_id, added.message_id) == (
+        "flag",
+        900,
+        900,
+    )
+    assert removed is not None and removed.feedback == "withdraw"
+    assert other is not None and other.feedback is None
+    assert kept is not None and kept.feedback is None
+
+
+def test_reactions_from_strangers_and_groups_are_ignored() -> None:
+    stranger = reaction_update(44, 900, new=("👎",), user_id=STRANGER_ID)
+    group = reaction_update(45, 900, new=("👎",), chat_type="group")
+    anonymous = reaction_update(46, 900, new=("👎",))
+    del anonymous["message_reaction"]["user"]
+
+    assert parse_update(stranger, ALLOWED, now=START) is None
+    assert parse_update(group, ALLOWED, now=START) is None
+    assert parse_update(anonymous, ALLOWED, now=START) is None
+
+
+def test_note_is_feedback_on_the_replied_message_or_the_latest() -> None:
+    replied = message_update(50, "/note too formal", extra={"reply_to_message": {"message_id": 7}})
+    plain = parse_update(
+        message_update(51, "/note@helper_bot  wrong\ntimezone"), ALLOWED, now=START
+    )
+    bare = parse_update(message_update(52, "/note"), ALLOWED, now=START)
+    other = parse_update(message_update(53, "/notes are useful"), ALLOWED, now=START)
+
+    note = parse_update(replied, ALLOWED, now=START)
+
+    assert note is not None
+    assert (note.kind, note.answerable, note.command) == ("command", False, None)
+    assert (note.feedback, note.feedback_note, note.feedback_target_message_id) == (
+        "note",
+        "too formal",
+        7,
+    )
+    assert note.text == "/note too formal"
+    assert note.acknowledge_with == "👌"
+    assert plain is not None and (plain.feedback_note, plain.feedback_target_message_id) == (
+        "wrong\ntimezone",
+        None,
+    )
+    assert bare is not None and (bare.feedback, bare.feedback_note) == ("flag", None)
+    assert other is not None and (other.kind, other.feedback) == ("message", None)
+
+
+def test_an_edited_command_is_logged_but_not_answered() -> None:
+    later = START.replace(minute=30)
+    edits = {
+        text: parse_update(message_update(60 + index, text, edit_date=later), ALLOWED, now=START)
+        for index, text in enumerate(["/note longer note", "/profile", "/stop", "/stop it now"])
+    }
+
+    assert all(envelope is not None and envelope.kind == "edit" for envelope in edits.values())
+    answerable = {text: envelope.answerable for text, envelope in edits.items() if envelope}
+    assert answerable == {
+        "/note longer note": False,
+        "/profile": False,
+        "/stop": False,
+        "/stop it now": True,
+    }

@@ -106,6 +106,8 @@ class TelegramApi:
                 "callback_query",
                 "poll_answer",
                 "stopped_message_generation",
+                # The owner's reactions: 👎 flags a reply. Not delivered unless listed.
+                "message_reaction",
             ],
         }
         if offset is not None:

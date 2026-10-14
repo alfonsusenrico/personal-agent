@@ -326,3 +326,27 @@ def stop_press(update_id: int, draft_id: int) -> dict[str, Any]:
             "draft_id": draft_id,
         },
     }
+
+
+def reaction_update(
+    update_id: int,
+    message_id: int,
+    *,
+    old: tuple[str, ...] = (),
+    new: tuple[str, ...] = (),
+    user_id: int = OWNER_ID,
+    chat_type: str = "private",
+    date: datetime | None = None,
+) -> dict[str, Any]:
+    """The owner changing their reaction on a message from `old` to `new` emoji."""
+    return {
+        "update_id": update_id,
+        "message_reaction": {
+            "chat": {"id": user_id if chat_type == "private" else -100500, "type": chat_type},
+            "message_id": message_id,
+            "user": {"id": user_id, "is_bot": False, "first_name": "Owner"},
+            "date": int((date or START).timestamp()),
+            "old_reaction": [{"type": "emoji", "emoji": emoji} for emoji in old],
+            "new_reaction": [{"type": "emoji", "emoji": emoji} for emoji in new],
+        },
+    }

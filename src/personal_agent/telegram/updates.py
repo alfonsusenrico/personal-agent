@@ -1,13 +1,17 @@
 """Map Telegram updates to the channel-neutral inbound envelope.
 
-Only private-chat messages, button presses, poll votes, and Stop presses from
-allowlisted users become envelopes; anything else is ignored without being stored,
-because a stranger's message is their personal data.
+Only private-chat messages, button presses, poll votes, Stop presses, and reactions
+from allowlisted users become envelopes; anything else is ignored without being
+stored, because a stranger's message is their personal data.
 
 Some Telegram clients send a Stop press as a typed /stop command instead of a
 stopped_message_generation update, so /stop is a Stop press too, never a message.
 /profile is a command answered by code; /start is a message that also asks the
 assistant to get to know the owner now.
+
+Reply feedback is mapped here, so the store sees only channel-neutral intents: 👎
+added to a message flags it, 👎 removed withdraws the flag, and /note notes the
+replied-to message or the latest reply, acknowledged with 👌.
 """
 
 from __future__ import annotations
@@ -42,8 +46,18 @@ _UNREADABLE_CONTENT = (
 
 _STOP_COMMAND = re.compile(r"/stop(@[A-Za-z0-9_]+)?")
 _PROFILE_COMMAND = re.compile(r"/profile(@[A-Za-z0-9_]+)?")
+_NOTE_COMMAND = re.compile(r"/note(?:@[A-Za-z0-9_]+)?(?:\s+(?P<note>.*))?", re.DOTALL)
+# The texts that act as commands when sent: an edit to one is logged only.
+_COMMAND_EDIT = re.compile(
+    r"/(?:stop|profile)(?:@[A-Za-z0-9_]+)?|/note(?:@[A-Za-z0-9_]+)?(?:\s.*)?", re.DOTALL
+)
+DISLIKE = "👎"
+NOTE_ACKNOWLEDGEMENT = "👌"
 
-EventKind = Literal["message", "edit", "unsupported", "button", "poll_answer", "stop", "command"]
+EventKind = Literal[
+    "message", "edit", "unsupported", "button", "poll_answer", "stop", "command", "reaction"
+]
+FeedbackIntent = Literal["flag", "withdraw", "note"]
 Trust = Literal["owner_direct", "owner_forwarded"]
 
 
@@ -96,6 +110,20 @@ class _PollAnswer(_Lenient):
     option_ids: list[int]
 
 
+class _ReactionType(_Lenient):
+    type: str
+    emoji: str | None = None
+
+
+class _ReactionUpdated(_Lenient):
+    chat: _Chat
+    message_id: int
+    user: _User | None = None
+    date: int
+    old_reaction: list[_ReactionType] = []
+    new_reaction: list[_ReactionType] = []
+
+
 class _GenerationStopped(_Lenient):
     chat: _Chat
     draft_id: int
@@ -108,6 +136,7 @@ class _Update(_Lenient):
     callback_query: _CallbackQuery | None = None
     poll_answer: _PollAnswer | None = None
     stopped_message_generation: _GenerationStopped | None = None
+    message_reaction: _ReactionUpdated | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +162,15 @@ class Envelope:
     poll_option_ids: tuple[int, ...] = ()
     # The stopped draft; None for a /stop command, which stops whatever is generating.
     draft_id: int | None = None
+    # A command answered by code in its own turn.
+    command: Literal["profile"] | None = None
+    # Reply feedback: the target is this channel's message ID, or None for the latest
+    # reply; an empty note is a flag.
+    feedback: FeedbackIntent | None = None
+    feedback_target_message_id: int | None = None
+    feedback_note: str | None = None
+    # The reaction that acknowledges the command message, if any.
+    acknowledge_with: str | None = None
 
 
 def update_id_of(update: dict[str, Any]) -> int | None:
@@ -158,6 +196,8 @@ def parse_update(
         return _poll_vote(parsed.update_id, parsed.poll_answer, allowed, now, update)
     if parsed.stopped_message_generation is not None:
         return _stop(parsed.update_id, parsed.stopped_message_generation, allowed, now, update)
+    if parsed.message_reaction is not None:
+        return _reaction(parsed.update_id, parsed.message_reaction, allowed, update)
     message = parsed.message or parsed.edited_message
     if message is None or message.sender is None or message.sender.is_bot:
         return None
@@ -185,6 +225,30 @@ def parse_update(
             message_id=message.message_id,
             occurred_at=datetime.fromtimestamp(message.date, UTC),
             text="/profile",
+            command="profile",
+        )
+    note = _NOTE_COMMAND.fullmatch(message.text.strip()) if message.text and not is_edit else None
+    if note is not None:
+        body = (note.group("note") or "").strip()
+        return _control_envelope(
+            parsed.update_id,
+            user_id=message.sender.id,
+            kind="command",
+            now=now,
+            raw=update,
+            message_id=message.message_id,
+            occurred_at=datetime.fromtimestamp(message.date, UTC),
+            text=message.text,
+            answerable=False,
+            reply_to_message_id=(
+                message.reply_to_message.message_id if message.reply_to_message else None
+            ),
+            feedback="note" if body else "flag",
+            feedback_target_message_id=(
+                message.reply_to_message.message_id if message.reply_to_message else None
+            ),
+            feedback_note=body or None,
+            acknowledge_with=NOTE_ACKNOWLEDGEMENT,
         )
     modality = _modality(update["edited_message" if is_edit else "message"])
     if is_edit:
@@ -209,8 +273,14 @@ def parse_update(
         ),
         text=message.text if message.text is not None else message.caption,
         raw=update,
-        answerable=modality != "service",
+        # An edited command is logged only: commands act when sent, never on an edit.
+        answerable=modality != "service"
+        and not (is_edit and message.text is not None and _is_command(message.text)),
     )
+
+
+def _is_command(text: str) -> bool:
+    return _COMMAND_EDIT.fullmatch(text.strip()) is not None
 
 
 def _modality(message: dict[str, Any]) -> str:
@@ -300,3 +370,34 @@ def _stop(
     return _control_envelope(
         update_id, user_id=stopped.chat.id, kind="stop", now=now, raw=raw, draft_id=stopped.draft_id
     )
+
+
+def _reaction(
+    update_id: int, updated: _ReactionUpdated, allowed: set[int], raw: dict[str, Any]
+) -> Envelope | None:
+    # Reactions from anonymous admins carry no user; only private chats are handled.
+    if updated.chat.type != "private" or updated.user is None or updated.user.id not in allowed:
+        return None
+    before = _emojis(updated.old_reaction)
+    after = _emojis(updated.new_reaction)
+    feedback: FeedbackIntent | None = None
+    if DISLIKE in after and DISLIKE not in before:
+        feedback = "flag"
+    elif DISLIKE in before and DISLIKE not in after:
+        feedback = "withdraw"
+    return _control_envelope(
+        update_id,
+        user_id=updated.user.id,
+        kind="reaction",
+        now=datetime.fromtimestamp(updated.date, UTC),
+        raw=raw,
+        chat_id=updated.chat.id,
+        message_id=updated.message_id,
+        answerable=False,
+        feedback=feedback,
+        feedback_target_message_id=updated.message_id,
+    )
+
+
+def _emojis(reactions: list[_ReactionType]) -> set[str]:
+    return {reaction.emoji for reaction in reactions if reaction.emoji is not None}

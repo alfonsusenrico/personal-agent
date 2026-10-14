@@ -42,6 +42,7 @@ async def test_get_updates_long_polls_messages_and_edits_from_the_offset() -> No
             "callback_query",
             "poll_answer",
             "stopped_message_generation",
+            "message_reaction",
         ],
         "offset": 7,
     }
