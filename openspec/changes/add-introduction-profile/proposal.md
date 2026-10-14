@@ -10,57 +10,64 @@ initiative) also reads this profile, so it comes next.
 
 ## Expected Outcome
 
-- **Offer:** on the owner's next message after this change ships, the
-  assistant answers normally and then offers a short introduction once, with
-  Start and Later buttons. After Later it never offers again; `/start` begins
-  or resumes the introduction at any time.
-- **Introduction:** about 8 short questions, one at a time, each skippable,
-  with buttons where the answer is a choice:
-  - what to call the owner, and the assistant's own name (it may suggest a
-    few as buttons);
-  - language (default language, and whether to mix English and Indonesian);
-  - reply style (length, tone, emoji, humour);
-  - work or study, daily routine, interests;
-  - the timezone, confirmed.
-- **Summary:** the introduction ends with one summary of exactly what will be
-  stored, with Save and Edit buttons. Nothing is saved before Save. Stopping
-  halfway keeps the answers as a draft that `/start` resumes.
-- **Afterwards:** replies use the chosen names, language, and style, and the
-  assistant does not ask again about anything in the profile. On Save, the
-  bot's Telegram name becomes the chosen name.
-- **Later changes:** when the owner states a change directly ("call me Sam
-  from now", "keep replies shorter", "I'm in Tokyo this week"), the reply
-  adds a one-tap Confirm and Cancel; only Confirm saves it. Nothing is
-  inferred silently.
+- **Getting to know the owner, gradually:** the assistant learns what to call
+  the owner, its own name, language, reply style, timezone, work or study,
+  daily routine, and interests inside normal conversation. Every reply first
+  answers what the owner said and follows topic jumps. At a natural moment it
+  may ask about one thing it does not know yet: at most one such question
+  every six owner turns, at most two attempts per topic, and never again for
+  a topic the owner waves off. The timezone is confirmed, not asked.
+- **`/start`:** asks the open questions now, one per reply, while the owner
+  keeps answering; any other topic ends it.
+- **Saved at once:** whatever the owner states about themselves or about how
+  the assistant should behave ("call me Sam", "keep replies short", "I'm in
+  Tokyo this week", or an answer to its question) is saved immediately and
+  shown under the reply as "Saved: What to call you → Sam" with an Undo
+  button. Nothing is inferred silently.
+- **Afterwards:** replies use the stored names, language, and style, and the
+  assistant does not ask about anything already stored. The bot's Telegram
+  name follows the assistant's name.
 - **`/profile`:** shows every stored entry with when it was set, with a
   Remove button per entry. A change keeps the old value as dated history;
   Remove deletes the entry and all its earlier versions.
 - **Menu:** the bot's command menu lists this project's commands only
-  (`/profile`, `/stop`), replacing about 65 stale commands left from an
-  earlier setup on the same bot.
+  (`/start`, `/profile`, `/stop`), replacing about 65 stale commands left
+  from an earlier setup on the same bot.
+
+## Owner decisions
+
+- 2026-10-14 (discussion): topics names, language, reply style, work or
+  study, routine, interests (not people close to the owner); the name renames
+  the bot (bot-wide); explicit statements only; changes keep history, Remove
+  deletes.
+- 2026-10-14 (live check): the first version ran the introduction as a mode
+  (one topic per reply in a fixed order, values held until a Save at the
+  end). The owner rejected it as scripted: it kept returning to the open
+  question and a stated change sat unsaved. Replaced by the gradual
+  behaviour above; values are saved at once with Undo; there is no offer,
+  and `/start` stays as an optional shortcut.
 
 ## What Changes
 
-- **Profile store:** versioned entries per person and field, with their
-  source messages, status (draft, pending, active, superseded), and
-  confirmation time. Fields: `address`, `assistant_name`, `language`,
+- **Profile store:** versioned entries per person and field (active or
+  superseded), with their source messages, the entry each one replaced, and
+  when it was saved. Fields: `address`, `assistant_name`, `language`,
   `reply_style`, `timezone`, `work`, `routine`, `interests`.
-- **Introduction state:** offered, declined, active, completed, per person.
-- **Capturing answers without extra calls:** the reply model marks an answer
-  or a stated change with a `<pa-profile field="...">value</pa-profile>`
-  directive. Code validates it (known field, length, a real IANA timezone,
-  at most 64 characters for the name) and stores it as a draft during the
-  introduction or as a pending change otherwise.
-- **Action buttons:** buttons whose press is handled by code rather than
-  answered by the model (Start, Later, Save, Edit, Confirm, Cancel, Remove),
-  stored with their action and target and executed once.
+- **Topic pacing:** per person and topic, how often it was asked, when, and
+  whether the owner declined it; whether `/start` asked for questions now.
+- **Capturing values without extra calls:** the reply model marks a stated
+  value with `<pa-profile field="...">value</pa-profile>`, a declined topic
+  with `skip="true"`, and a getting-to-know question with
+  `<pa-ask field="..."/>`. Code validates values (known field, length, a real
+  IANA timezone, at most 64 characters for the name) and saves them.
+- **Action buttons:** Undo and Remove, handled by code and executed once.
 - **Prompt:** the active profile is added to the stable instructions after
-  the persona and Telegram guide, so it stays cached; while the introduction
-  runs, the per-turn context note lists the answered and remaining topics.
-- **Telegram:** `setMyName` on Save or a confirmed name change, sent through
-  the outbox; `setMyCommands` at worker start.
-- **Persona:** uses the stored name; without one it keeps saying a name will
-  be chosen soon.
+  the persona and Telegram guide, so it stays cached; the per-turn context
+  note lists what is still unknown only when pacing allows a question.
+- **Telegram:** `setMyName` when the assistant's name is saved or restored,
+  sent through the outbox; `setMyCommands` at worker start.
+- **Persona:** uses the stored name; without one it says the owner can give
+  it one.
 
 ## Non-goals
 
@@ -70,6 +77,7 @@ initiative) also reads this profile, so it comes next.
 - Profiles for anyone other than the owner (registered relatives come
   later; the profile is per person already).
 - Quiet hours and initiative settings (S6).
+- Sharing a location to set the timezone (a later change, owner decision).
 - The bot's profile photo, description, and short description.
 - Deleting the raw messages a removed entry came from: the message log
   stays permanent.
@@ -78,8 +86,8 @@ initiative) also reads this profile, so it comes next.
 
 ### New Capabilities
 
-- `owner-profile`: the introduction, the versioned profile, explicit changes
-  with confirmation, `/profile`, and how the profile shapes replies.
+- `owner-profile`: learning the profile gradually in conversation, saving
+  with Undo, `/start`, `/profile`, and how the profile shapes replies.
 
 ### Modified Capabilities
 
@@ -94,22 +102,21 @@ on request. Its migration is hand-written and additive (`database`).
 
 ## Cost
 
-- **No extra model calls:** answers and changes are captured from the reply
+- **No extra model calls:** values and questions are marked in the reply
   itself.
 - **Profile in the prompt:** about 150-300 tokens in the cached prefix;
   each profile change costs one uncached prefix on the next call (about
   USD 0.0005).
-- **Introduction:** about 10 turns once, about USD 0.01.
-- **Evaluation:** scripted introductions and 30-turn re-ask checks on the
-  real model, about USD 0.05 in total (owner-authorised with approval).
+- **Evaluation:** conversation scripts on the real model, about USD 0.05 in
+  total (owner-authorised with approval).
 
 ## Impact
 
 - **New code:** `src/personal_agent/profile/` (store, directive handling,
-  summary and `/profile` rendering), changes in `conversation/` (prompt,
-  context note, commit) and `telegram/` (action buttons, bot name, commands).
-- **Data:** migration `0004` (profile entries, introduction state, button
-  actions, an outbox kind for bot settings). Forward-only and additive.
-- **Owner actions:** approve this proposal; run the introduction live.
-- **Fixed text:** the summary and `/profile` list fields with English
-  labels; values are the owner's own words.
+  pacing, `/profile` rendering), changes in `conversation/` (prompt, context
+  note, commit) and `telegram/` (action buttons, bot name, commands).
+- **Data:** migration `0004` (profile entries and removals, topic pacing,
+  button actions, the `/profile` command, an outbox kind for the bot's
+  name). Forward-only and additive.
+- **Fixed text:** "Saved:" lines and `/profile` use English labels; values
+  are the owner's own words.

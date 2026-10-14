@@ -16,40 +16,41 @@ See proposal.md for why. Current state after S1:
   narrow crash window described in the S1 design.
 - Bot API 10.3 (2026-08-24): `setMyName` takes 0-64 characters and applies to
   every user of the bot (optionally per language); `setMyCommands` takes up
-  to 100 commands with a scope. The bot currently has about 65 stale
-  commands from an earlier setup.
+  to 100 commands with a scope. Bots receive no timezone or location for a
+  user; a location arrives only when the user shares it. The bot had about 65
+  stale commands from an earlier setup.
 
 ## Goals / Non-Goals
 
-**Goals:** capture the profile with no extra model calls; show the owner
-exactly what is stored before it counts; keep the stable prefix cacheable;
-make every code-handled button act once even on repeated presses.
+**Goals:** learn the profile inside natural conversation with no extra model
+calls; never hold the conversation on a question; make every stored value
+visible and reversible at once; keep the stable prefix cacheable; make every
+code-handled button act once even on repeated presses.
 
-**Non-goals:** a structured form outside the chat; per-language bot names;
-editing an entry in place from `/profile` (the owner says the new value in
-chat, which goes through the normal confirmation).
+**Non-goals:** a form or wizard of any kind; per-language bot names; editing
+an entry in place from `/profile` (the owner says the new value in chat).
 
 ## Decisions
 
-### 1. The reply model marks profile values with a directive
+### 1. The reply model marks values, declines, and questions
 
-A reply may contain `<pa-profile field="address">Sam</pa-profile>`. Code
-validates and strips it:
+A reply may contain, anywhere (usually at the end):
 
-- `field` is one of `address`, `assistant_name`, `language`, `reply_style`,
-  `timezone`, `work`, `routine`, `interests`;
-- the value is plain text up to 300 characters (64 for `assistant_name`,
-  the `setMyName` limit);
-- `timezone` must be an IANA name that `zoneinfo` loads;
-- at most one directive per field per reply; invalid ones are dropped and
-  counted like other dropped directives.
+- `<pa-profile field="address">Sam</pa-profile>`: a value the owner stated;
+- `<pa-profile field="routine" skip="true"/>`: the owner declined the topic;
+- `<pa-ask field="routine"/>`: this reply asks a getting-to-know question.
 
-During the introduction a valid value becomes a draft. Otherwise it becomes
-a pending change, and code appends Confirm and Cancel buttons to the reply.
+Code validates and strips them: `field` is one of `address`,
+`assistant_name`, `language`, `reply_style`, `timezone`, `work`, `routine`,
+`interests`; a value is plain text up to 300 characters (64 for
+`assistant_name`, the `setMyName` limit); `timezone` must be an IANA name
+that `zoneinfo` loads; one directive per field per reply; invalid ones are
+dropped and counted like other dropped directives.
 
-The guide tells the model to emit the directive only for something the owner
-stated directly about themselves or about how the assistant should behave.
-This cannot be enforced in code, so it is measured (decision 9).
+The persona tells the model to mark only what the owner states directly
+about themselves or about how the assistant should behave. This cannot be
+enforced in code, so it is measured (decision 9) and every saved value is
+shown with Undo.
 
 Rejected:
 - **A separate extraction call per turn:** doubles calls on every turn to
@@ -60,181 +61,164 @@ Rejected:
 
 ### 2. Profile storage: versioned entries
 
-Table `profile_entry` (migration `0004`): `person_id`, `field`, `value`,
-`status` (`draft`, `pending`, `active`, `superseded`), `source_event_ids`,
-`turn_id`, `created_at`, `confirmed_at`, `superseded_at`.
+Table `profile_entry`: `person_id`, `field`, `value`, `status` (`active`,
+`superseded`), `source_event_ids`, `turn_id`, `replaces_id`, `saved_at`,
+`superseded_at`.
 
-- At most one `active` row per person and field (partial unique index), and
-  at most one `pending` row per person and field (a newer pending replaces
-  the older, which is deleted: it was never confirmed).
-- **Confirm or Save:** the current `active` row becomes `superseded` with
-  `superseded_at`, and the new row becomes `active` with `confirmed_at`, in
-  one transaction.
+- At most one `active` row per person and field (partial unique index).
+- **Save:** the current `active` row becomes `superseded`, and the new row,
+  which records it in `replaces_id`, becomes `active`, in one transaction. A
+  value equal to the active one saves nothing.
+- **Undo:** deletes the rows a reply saved and makes each one's `replaces_id`
+  row active again (or leaves the field empty). A row that is no longer
+  active makes the press stale.
 - **Remove:** deletes every row of that person and field (owner decision).
   The source messages stay in the message log. A `profile_removal` row keeps
   only the field and the time, so while messages that mention the removed
   value are still in the recent window, the context note tells the model not
   to use them.
-- **Timezone:** confirming a `timezone` entry also sets `person.timezone` in
-  the same transaction, so the poller keeps reading one column; removing it
-  sets `person.timezone` back to NULL (the fallback).
+- **Timezone:** saving, undoing, or removing a `timezone` entry also sets
+  `person.timezone` (NULL for none) in the same transaction, so the poller
+  keeps reading one column.
 
 Rejected: one JSON column on `person` (no history, no sources); overwriting
 values (the owner chose history for changes).
 
-### 3. Introduction state
+### 3. Pacing getting-to-know questions
 
-Table `introduction`: `person_id` (primary key), `state` (`offered`,
-`declined`, `active`, `completed`), `offered_at`, `started_at`,
-`completed_at`.
+Table `profile_topic` (person, field): `asks`, `last_asked_at`,
+`declined_at`. Table `profile_pacing` (person): `asking_now_since`, set by
+`/start`.
 
-- **Offer:** when a turn is answered and the person has no `introduction` row,
-  the context note asks the model to add a one-sentence offer after its
-  answer, and code appends Start and Later buttons; the row is inserted as
-  `offered` with the answer, so the offer happens once.
-- **Start** (button or `/start`): state `active`. `/start` when `completed`
-  starts a review: drafts are prefilled from the active profile and topics
-  without a value stay skipped, so the summary comes at once and a stated
-  change shows an updated summary to save. In the live check, re-entering
-  question mode for a skipped topic held "call me Sam again" as an
-  unsaved answer with no Save in sight; a skipped topic can still be filled
-  later by stating it in chat (a proposal with Confirm).
-- **Later:** state `declined`; never offered again.
-- **While `active`:** the context note lists answered topics (with their
-  draft values), skipped topics, and the open topics in order. An answer is
-  stored only with the reply, so the note says: if the latest message
-  answers the first open topic, mark it and ask about the next; otherwise ask
-  about the first. For the timezone it asks the model to confirm the current
-  one. A skipped topic gets no draft.
-- **Summary:** code appends it when the last open topic is answered, after
-  any change once all topics are done, or when the model writes
-  `<pa-intro-summary/>`, or when `/start` reopens an introduction with nothing
-  left to ask; never on the reply to an Edit press, which only asks what to
-  change. Values are list items: Rich Markdown joins single line breaks into
-  one paragraph (seen live). Finishing early (the model's `<pa-intro-summary/>`
-  with topics still open) skips those topics, so Edit afterwards changes an
-  answer instead of resuming the questions. The first paid run found this:
-  after Edit the model went back to asking about the next topic.
-- **Stopping halfway:** drafts stay; normal chat continues with the context
-  note offering nothing further; `/start` resumes with the remaining topics.
+- A topic is **open** when it has no active value, was not declined, and was
+  asked fewer than two times.
+- The context note lists the open topics only when a question is allowed:
+  `/start` asked for questions now, or at least six owner turns have been
+  answered since the last question. Otherwise the model is not told what is
+  unknown, so it cannot drift into asking.
+- The note says: answer the owner first; ask about one open topic only at a
+  natural point (small talk, a greeting, or just after finishing a request),
+  lightly and optionally; mark it with `<pa-ask/>`; never steer back when
+  the owner moves on. For the timezone, confirm the current one rather than
+  asking (Telegram does not tell bots a user's timezone or location).
+- `<pa-ask>` increments `asks` and sets `last_asked_at`; `skip="true"` sets
+  `declined_at`.
+- **`/start`:** sets `asking_now_since`, and the note asks the model to ask
+  about the next open topic after answering, one per reply. A reply in that
+  mode without `<pa-ask>` (the owner moved on, or nothing is open) clears it.
 
-### 4. The summary and `/profile` are rendered by code
+Rejected (live check, 2026-10-14): an introduction mode that asked one topic
+per reply in a fixed order and held values until a Save at the end. It made
+the conversation feel scripted: every reply steered back to the next topic,
+and a stated change during it sat unsaved with no Save in sight. Also
+rejected by the owner: a one-time Start/Later offer.
 
-The owner must confirm exactly what is stored, so the summary list is built
-from the draft rows, not written by the model: one line per field with an
-English label and the owner's value. Buttons: Save and Edit. Edit keeps the
-introduction active and asks the model which item to change.
+### 4. Saved at once, shown with Undo
 
-`/profile` is answered without a model call: one line per active entry with
-its label, value, and local date set, a Remove button per entry, and a line
-saying that changes can be stated in the chat. With no entries it says the
-profile is empty and offers `/start`. It is a command event in a turn of its
-own (`turn.command`), which no other message joins; the stored assistant
-message is a placeholder, so profile values do not stay in the recent window
-after a removal. A message from Remove leaves the other Remove buttons of
-that list unusable (one action per message); `/profile` again shows a fresh
-list.
+When a reply marks values, they are saved in the turn's commit transaction,
+and code appends one line per saved value under the reply ("Saved: **What to
+call you** → Sam") with one Undo button for that reply. A reply that marks
+only a decline or a question shows nothing extra.
 
-Rejected: model-written summaries (they can paraphrase or drop a value the
-owner then saves unseen).
+Rejected: Confirm per value (a tap for every answer; owner chose Undo) and
+silent saving (owner chose to see it).
 
-### 5. Action buttons handled by code
+### 5. Action buttons and `/profile`
 
 `reply_button` gains `action` (NULL for quick replies) and `target_id`.
-Actions: `intro_start`, `intro_later`, `intro_save`, `intro_edit`,
-`profile_confirm`, `profile_cancel`, `profile_remove`.
+Actions: `profile_undo` (target: the turn whose values to undo) and
+`profile_remove` (target: the active entry).
 
-- The press is stored as an event (as today) and the action runs in the same
+- The press is stored as an event and the action runs in the same
   transaction, guarded by the button's `pressed_at`, so a repeated press does
-  nothing.
-- The pressed message is redrawn with the outcome ("✓ Saved", "Cancelled",
-  "Removed") as quick replies are today.
-- `intro_start` and `intro_edit` also open a turn so the model asks the next
-  question, and `intro_save` opens one so the model closes the introduction
-  in one sentence under the new names (the live check showed that ending on
-  a silent "✓ Saved" felt like the conversation stopped). The other actions
-  need no model call. A stored press also wakes the sender, so a rename goes
-  out at once.
-- Code adds only its own buttons to the offer message: choice buttons the
-  model wrote there are removed, because in the live check the owner pressed
-  the model's own "Mulai" button, which started nothing.
-- A stale action (its target already confirmed, removed, or replaced) is
-  acknowledged with a short notice and changes nothing.
+  nothing. The pressed message is redrawn with the outcome ("✓ Undone",
+  "✓ Removed: Daily routine"); a stale press gets a short notice and changes
+  nothing. A stored press also wakes the sender, so a rename goes out at
+  once.
+- Neither action calls the model.
+
+`/profile` is answered without a model call: one list item per active entry
+with its label, value, and local date set, a Remove button per entry, and a
+line saying that changes can be stated in the chat. It is a command event in
+a turn of its own (`turn.command`), which no other message joins; the stored
+assistant message is a placeholder, so profile values do not stay in the
+recent window after a removal. One Remove uses up that message's buttons;
+`/profile` again shows a fresh list. Values are list items because Rich
+Markdown joins single line breaks into one paragraph (seen live).
 
 Rejected: letting the model answer these presses (it cannot guarantee the
 stored outcome).
 
 ### 6. Prompt layout
 
-The active profile is rendered after the persona and Telegram guide as an
-"About the owner and you" section of the instructions, in a fixed field
-order. It changes only on Save, Confirm, or Remove, so the cached prefix is
-reused between changes. The persona line "You do not have a name yet" is
-replaced by the stored name when there is one. Rules added to the persona:
-use the stored address and name, follow the stored language and style
-unless the owner's latest message asks otherwise, and never ask about a
-field the profile already holds unless the owner brings it up.
-
-Drafts and pending values are not in the instructions; they appear only in
-the per-turn context note, so an unconfirmed value never shapes replies.
+The active profile is rendered after the persona and Telegram guide as "The
+owner's profile" section of the instructions, in a fixed field order. It
+changes only when a value is saved, undone, or removed, so the cached prefix
+is reused between changes. The persona uses the stored name (without one, it
+says the owner can give it one), follows the stored language and style
+unless the owner's latest message asks otherwise, and never asks about a
+stored field unless the owner brings it up.
 
 ### 7. Bot name and command menu
 
-- **Name:** Save or a confirmed `assistant_name` writes an outbox row of a
-  new kind `bot_name`; the sender calls `setMyName` with no language code.
-  A rate-limit waits and retries like other rows; a permanent error is
-  recorded on the row and logged, and the profile stays saved. Removing the
-  name does not rename the bot back.
+- **Name:** saving `assistant_name`, or an Undo that restores one, writes an
+  outbox row of kind `bot_name`; the sender calls `setMyName` with no
+  language code. A rate limit waits and retries like other rows; a permanent
+  error is recorded on the row and logged, and the profile stays saved.
+  Removing the name does not rename the bot.
 - **Commands:** at worker start, `setMyCommands` (default scope) sets
-  `profile` and `stop` with short descriptions, only when `getMyCommands`
-  differs, so restarts do not repeat the call.
+  `start`, `profile`, and `stop`, only when `getMyCommands` differs, so
+  restarts do not repeat the call.
 
 ### 8. Data model (migration `0004`)
 
-- `profile_entry` and `introduction` as above, each with `person_id`.
-- `reply_button.action`, `reply_button.target_id`, with a check that
-  `target_id` is set for actions that need one.
-- `outbox.kind` gains `bot_name`; `turn_id` and `message_id` become optional
-  for that kind only.
-- `profile_removal` (field and time only), `turn.command`, and the
-  `command` kind of `inbound_event`.
+- `profile_entry`, `profile_removal`, `profile_topic`, `profile_pacing`,
+  each with `person_id`.
+- `reply_button.action` and `target_id` (both set or both NULL).
+- The `command` kind of `inbound_event` and `turn.command`.
+- `outbox.kind` gains `bot_name`; `turn_id` and `message_id` are optional for
+  that kind only.
 
 Forward-only and additive; existing rows are untouched. Rollback is the
-previous image: it ignores the new tables and columns.
+previous image: it ignores the new tables and columns. The first version of
+this change was applied only to the owner's local database, which was moved
+to this schema by hand, keeping its saved values.
 
 ### 9. Evaluation
 
 Synthetic scripts (free on the stub with scripted replies, then on the real
 model, owner-authorised):
 
-- a full introduction in English and one in Indonesian, a skipped topic, a
-  stop halfway then `/start` to resume, Edit at the summary, Later;
-- explicit changes confirmed and cancelled, a timezone change;
-- incidental mentions that must not propose a change ("my friend calls me
-  Bob", "reply to him in English");
-- a 30-turn conversation after the introduction: zero questions about stored
-  fields, replies in the stored language and style (model-judged, owner
-  spot-checked).
+- a first conversation that gets to know the owner gradually while they talk
+  about other things;
+- a topic jump right after a question, and a declined topic;
+- `/start` answered for a few topics, then an unrelated request;
+- stated changes (name, style, timezone), Undo, and the bot's name;
+- incidental mentions that must not save anything ("my friend calls me
+  Bob");
+- a 30-turn conversation with a saved profile: no questions about stored
+  fields.
 
-Pass bar: every structural check passes; zero re-asks; zero false proposals
-across the incidental-mention scripts.
+Pass bar: every structural check passes; no question about a stored field;
+no reply that ignores a topic jump; nothing saved from incidental mentions;
+no more than one question per six turns outside `/start`.
 
 ## Risks / Trade-offs
 
-- [The model proposes a change the owner did not state] → Confirm is
-  required; incidental-mention scripts measure it; the guide gives examples.
-- [The model forgets to mark an answer] → the context note lists the
-  remaining topics, so it asks again or the summary shows the gap before
-  Save.
+- [The model saves something the owner did not state] → it is shown at once
+  with Undo; incidental-mention scripts measure it.
+- [The model asks at an awkward moment] → code allows at most one question
+  every six turns and two per topic; the note only lists open topics when a
+  question is allowed.
+- [The model forgets to mark a question] → pacing then undercounts; the
+  scripts count questions in transcripts.
 - [The bot name is bot-wide] → relatives will see the same name (owner
   accepted).
 - [Profile text in the instructions is owner-written] → it is the owner's
   own data, rendered as data under a heading, with the 300-character limit.
-- [The prefix cache misses after each change] → changes are rare.
 
 ## Migration Plan
 
 1. Apply `0004` with the migrate service before the new worker starts.
-2. Start the worker: it replaces the command menu and offers the
-   introduction on the owner's next message.
+2. Start the worker: it replaces the command menu.
 3. Rollback: start the previous worker image; the new tables stay unused.
