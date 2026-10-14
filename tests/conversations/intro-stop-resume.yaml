@@ -1,0 +1,25 @@
+name: intro-stop-resume
+description: The owner leaves the introduction halfway and resumes it with /start.
+owner: fresh
+steps:
+  - send: "hi"
+  - press: "Start introduction"
+  - settle: true
+  - wait: 20
+  - send: "Call me Sam"
+  - settle: true
+  - wait: 600
+  - send: "hold on, quick question: how long should I boil an egg for a soft yolk?"
+  - settle: true
+  - wait: 600
+  - send: "/start"
+fake_replies:
+  - "Hi! Want a quick introduction?"
+  - "What should I call you?"
+  - "Nice to meet you, Sam! What should I call myself?<pa-profile field=\"address\">Sam</pa-profile>"
+  - "About 6 minutes. Back to the introduction later: what should my name be?"
+  - "Let's continue. What should my name be?"
+expect:
+  introduction_state: active
+  pending_fields: []
+  context_contains: ["Answered so far: What to call you: Sam.", "Next topic: My name"]

@@ -1,0 +1,19 @@
+name: stated-change
+description: A stated change is saved only after Confirm; a cancelled one is not.
+steps:
+  - send: "call me Sam from now on"
+  - press: "Confirm"
+  - wait: 60
+  - send: "and please keep your replies really short"
+  - press: "Cancel"
+  - wait: 60
+  - send: "thanks"
+fake_replies:
+  - "Sure, Sam it is.<pa-profile field=\"address\">Sam</pa-profile>"
+  - "Got it, short replies.<pa-profile field=\"reply_style\">Really short</pa-profile>"
+  - "<pa-react emoji=\"👍\"/>"
+expect:
+  profile_active:
+    address: Sam
+  profile_absent: [reply_style]
+  pending_fields: []

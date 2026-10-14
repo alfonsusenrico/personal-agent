@@ -1,0 +1,104 @@
+name: profile-30-turns
+description: With a saved profile, 30 ordinary turns propose no changes (re-asks and style are reviewed in the transcript).
+seed_profile:
+  address: Sam
+  assistant_name: Nara
+  language: "English by default; mixing Indonesian is fine"
+  reply_style: "Short and casual, a bit of humour, few emoji"
+  timezone: Asia/Jakarta
+  work: Software engineer
+  routine: "Up around 6, works 9 to 5"
+  interests: "Cycling, cooking, sci-fi books"
+steps:
+  - send: "morning"
+  - settle: true
+  - wait: 120
+  - send: "what should I cook tonight? something quick"
+  - settle: true
+  - wait: 120
+  - send: "I have chicken, rice and some spinach"
+  - settle: true
+  - wait: 120
+  - send: "nice, how long for the chicken?"
+  - settle: true
+  - wait: 120
+  - send: "ok thanks"
+  - settle: true
+  - wait: 120
+  - send: "any tips for a 40 km ride this weekend?"
+  - settle: true
+  - wait: 120
+  - send: "what should I eat before it?"
+  - settle: true
+  - wait: 120
+  - send: "how do I fix a squeaky chain?"
+  - settle: true
+  - wait: 120
+  - send: "recommend me a sci-fi book I probably haven't read"
+  - settle: true
+  - wait: 120
+  - send: "I\"ve read that one, another?"
+  - settle: true
+  - wait: 120
+  - send: "explain what a hash map is in two sentences"
+  - settle: true
+  - wait: 120
+  - send: "and when would I use a tree instead?"
+  - settle: true
+  - wait: 120
+  - send: "aku capek banget hari ini"
+  - settle: true
+  - wait: 120
+  - send: "kerjaan numpuk, deadline besok"
+  - settle: true
+  - wait: 120
+  - send: "ok aku coba fokus dulu"
+  - settle: true
+  - wait: 120
+  - send: "back. what\"s a good way to plan tomorrow?"
+  - settle: true
+  - wait: 120
+  - send: "can you make that a short checklist?"
+  - settle: true
+  - wait: 120
+  - send: "what day is it today?"
+  - settle: true
+  - wait: 120
+  - send: "remind me what you know about me"
+  - settle: true
+  - wait: 120
+  - send: "what\"s the difference between baking soda and baking powder?"
+  - settle: true
+  - wait: 120
+  - send: "is it worth learning Rust this year?"
+  - settle: true
+  - wait: 120
+  - send: "give me a 3-day plan to start"
+  - settle: true
+  - wait: 120
+  - send: "how do I say \"see you tomorrow\" in Japanese?"
+  - settle: true
+  - wait: 120
+  - send: "lol nice"
+  - settle: true
+  - wait: 120
+  - send: "what\"s a good stretch after cycling?"
+  - settle: true
+  - wait: 120
+  - send: "how much water should I drink on a ride?"
+  - settle: true
+  - wait: 120
+  - send: "tell me a short joke"
+  - settle: true
+  - wait: 120
+  - send: "haha ok"
+  - settle: true
+  - wait: 120
+  - send: "summarise our chat today in 3 bullets"
+  - settle: true
+  - wait: 120
+  - send: "good night"
+expect:
+  turns: 30
+  pending_fields: []
+  instructions_contains: ["- Your name: Nara", "- Call the owner: Sam"]

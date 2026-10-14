@@ -1,0 +1,58 @@
+name: intro-english
+description: A fresh owner takes the offered introduction, answers every topic, and saves.
+owner: fresh
+steps:
+  - send: "morning!"
+  - press: "Start introduction"
+  - settle: true
+  - wait: 20
+  - send: "Call me Sam"
+  - settle: true
+  - wait: 20
+  - send: "Let's call you Nara"
+  - settle: true
+  - wait: 20
+  - send: "English by default, but mixing in Indonesian is fine"
+  - settle: true
+  - wait: 20
+  - send: "Short and casual, a bit of humour is welcome, few emoji"
+  - settle: true
+  - wait: 20
+  - send: "Yes, I'm in Jakarta"
+  - settle: true
+  - wait: 20
+  - send: "I'm a software engineer"
+  - settle: true
+  - wait: 20
+  - send: "I wake up around 6 and work 9 to 5"
+  - settle: true
+  - wait: 20
+  - send: "Cycling, cooking, and sci-fi books"
+  - press: "Save"
+  - wait: 60
+  - send: "what's my name, and what's yours?"
+fake_replies:
+  - "Morning! Want to do a quick introduction, so I know how you like things?"
+  - "Great! First, what should I call you?"
+  - "Nice to meet you, Sam! What would you like to call me?<pa-profile field=\"address\">Sam</pa-profile>"
+  - "Nara it is. Which language should I use by default?<pa-profile field=\"assistant_name\">Nara</pa-profile>"
+  - "Got it. How do you like replies: short or detailed, casual or formal?<pa-profile field=\"language\">English by default; mixing Indonesian is fine</pa-profile>"
+  - "Short and casual, noted. You're on Jakarta time (Asia/Jakarta), right?<pa-profile field=\"reply_style\">Short and casual, a bit of humour, few emoji</pa-profile>"
+  - "What do you do for work or study?<pa-profile field=\"timezone\">Asia/Jakarta</pa-profile>"
+  - "What does a usual day look like for you?<pa-profile field=\"work\">Software engineer</pa-profile>"
+  - "And what are you into outside work?<pa-profile field=\"routine\">Up around 6, works 9 to 5</pa-profile>"
+  - "Here's everything I have.<pa-profile field=\"interests\">Cycling, cooking, sci-fi books</pa-profile>"
+  - "You're Sam, and I'm Nara."
+expect:
+  introduction_state: completed
+  profile_active:
+    address: Sam
+    assistant_name: Nara
+    timezone: Asia/Jakarta
+    work: engineer
+    interests: cycling
+  pending_fields: []
+  bot_names: [Nara]
+  instructions_contains: ["- Your name: Nara", "- Call the owner: Sam"]
+expect_fake:
+  sent_contains: ["Start introduction", "**What to call you:** Sam", "**Interests:** Cycling"]

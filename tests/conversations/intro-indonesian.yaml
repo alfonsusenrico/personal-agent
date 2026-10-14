@@ -1,0 +1,50 @@
+name: intro-indonesian
+description: The introduction in Indonesian, with one topic skipped.
+owner: fresh
+steps:
+  - send: "/start"
+  - settle: true
+  - wait: 20
+  - send: "Panggil aku Sam aja"
+  - settle: true
+  - wait: 20
+  - send: "Namamu Nara ya"
+  - settle: true
+  - wait: 20
+  - send: "Bahasa Indonesia, campur Inggris juga boleh"
+  - settle: true
+  - wait: 20
+  - send: "Singkat dan santai"
+  - settle: true
+  - wait: 20
+  - send: "Iya, aku di Jakarta"
+  - settle: true
+  - wait: 20
+  - send: "Aku guru SMA"
+  - settle: true
+  - wait: 20
+  - send: "Lewati aja yang ini"
+  - settle: true
+  - wait: 20
+  - send: "Main musik dan baca novel"
+  - press: "Save"
+fake_replies:
+  - "Halo! Mau dipanggil apa?"
+  - "Oke, Sam! Aku mau dipanggil apa?<pa-profile field=\"address\">Sam</pa-profile>"
+  - "Nara, siap. Bahasa apa yang kamu mau?<pa-profile field=\"assistant_name\">Nara</pa-profile>"
+  - "Oke. Balasan mau singkat atau panjang?<pa-profile field=\"language\">Bahasa Indonesia, campur Inggris boleh</pa-profile>"
+  - "Siap. Kamu di zona waktu Jakarta (Asia/Jakarta), kan?<pa-profile field=\"reply_style\">Singkat dan santai</pa-profile>"
+  - "Kerja atau kuliah di mana?<pa-profile field=\"timezone\">Asia/Jakarta</pa-profile>"
+  - "Rutinitas harianmu gimana?<pa-profile field=\"work\">Guru SMA</pa-profile>"
+  - "Oke, dilewati. Hobimu apa?<pa-profile field=\"routine\" skip=\"true\"/>"
+  - "Ini ringkasannya.<pa-profile field=\"interests\">Main musik, baca novel</pa-profile>"
+expect:
+  introduction_state: completed
+  profile_active:
+    address: Sam
+    assistant_name: Nara
+    work: guru
+  profile_absent: [routine]
+  bot_names: [Nara]
+expect_fake:
+  sent_contains: ["Skipped: Daily routine"]
