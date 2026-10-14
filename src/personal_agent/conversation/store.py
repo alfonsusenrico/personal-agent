@@ -6,6 +6,7 @@ leaves either all of a step or none of it.
 
 from __future__ import annotations
 
+import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -17,12 +18,18 @@ from psycopg.types.json import Jsonb
 
 from personal_agent.conversation.context import render_turn
 from personal_agent.conversation.models import EventRow, GenerationPlan, MessageRow, TurnInput
+from personal_agent.profile import actions as profile_actions
+from personal_agent.profile import store as profile_store
+from personal_agent.profile.actions import ActionResult
+from personal_agent.profile.render import ProfileState
 from personal_agent.telegram.rich import PollSpec, QuickReply
 from personal_agent.telegram.updates import Envelope
 
 CHANNEL = "telegram"
 # One regeneration after a mid-turn message; later messages start the next turn.
 MAX_GENERATIONS = 2
+# /start, optionally with a deep-link payload, begins or resumes the introduction.
+_START_COMMAND = re.compile(r"/start(@[A-Za-z0-9_]+)?(\s+\S+)?")
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +124,7 @@ async def _turn_for_new_event(
         """
         SELECT id, status, generation FROM turn
         WHERE conversation_id = %s AND status IN ('collecting', 'generating')
+          AND command IS NULL
         ORDER BY id
         FOR UPDATE
         """,
@@ -135,6 +143,21 @@ async def _turn_for_new_event(
         VALUES (%s, %s, 'collecting', %s) RETURNING id
         """,
         (person_id, conversation_id, now),
+    )
+    return created["id"]
+
+
+async def _command_turn(
+    connection: AsyncConnection, person_id: int, conversation_id: int, command: str, now: datetime
+) -> int:
+    """A turn of its own for a command, which nothing else joins."""
+    created = await _required(
+        connection,
+        """
+        INSERT INTO turn (person_id, conversation_id, status, opened_at, command)
+        VALUES (%s, %s, 'collecting', %s, %s) RETURNING id
+        """,
+        (person_id, conversation_id, now, command),
     )
     return created["id"]
 
@@ -166,14 +189,24 @@ async def ingest(
         edit_of = original["id"] if original else None
     text, answerable = envelope.text, envelope.answerable
     button_row: dict[str, Any] | None = None
+    action: ActionResult | None = None
     if envelope.kind == "button":
         button_row = await _unused_button(connection, person_id, envelope.button_token or "")
         text, answerable = (button_row["label"], True) if button_row else (None, False)
+        if button_row is not None and button_row["action"] is not None:
+            action = await profile_actions.press(
+                connection, person_id, button_row["action"], button_row["target_id"], now
+            )
+            answerable = action.done and action.answerable
     elif envelope.kind == "poll_answer":
         text = await _vote_text(connection, person_id, envelope)
         answerable = text is not None
+    elif envelope.kind == "message" and text and _START_COMMAND.fullmatch(text.strip()):
+        await profile_store.start_introduction(connection, person_id, now)
     turn_id = None
-    if answerable:
+    if envelope.kind == "command" and text:
+        turn_id = await _command_turn(connection, person_id, conversation_id, text[1:], now)
+    elif answerable:
         turn_id = await _turn_for_new_event(connection, person_id, conversation_id, now)
     row = await _required(
         connection,
@@ -212,7 +245,7 @@ async def ingest(
             event_id=row["id"],
             turn_id=turn_id,
             duplicate=False,
-            button=await _record_press(connection, envelope, button_row, row["id"], now),
+            button=await _record_press(connection, envelope, button_row, row["id"], now, action),
         )
     if envelope.kind == "stop":
         stopped = await _one(
@@ -241,7 +274,7 @@ async def _unused_button(
     return await _one(
         connection,
         """
-        SELECT b.id, b.label, b.outbox_id, o.text AS markdown
+        SELECT b.id, b.label, b.outbox_id, b.action, b.target_id, o.text AS markdown
         FROM reply_button b JOIN outbox o ON o.id = b.outbox_id
         WHERE b.token = %s AND b.person_id = %s
           AND NOT EXISTS (
@@ -260,6 +293,7 @@ async def _record_press(
     button_row: dict[str, Any] | None,
     event_id: int,
     now: datetime,
+    action: ActionResult | None,
 ) -> ButtonPress:
     if button_row is None:
         return ButtonPress(envelope.callback_query_id or "", accepted=False)
@@ -267,10 +301,12 @@ async def _record_press(
         "UPDATE reply_button SET pressed_at = %s, pressed_event_id = %s WHERE id = %s",
         (now, event_id, button_row["id"]),
     )
+    if action is not None and not action.done:
+        return ButtonPress(envelope.callback_query_id or "", accepted=False)
     return ButtonPress(
         envelope.callback_query_id or "",
         accepted=True,
-        label=button_row["label"],
+        label=action.label if action is not None else button_row["label"],
         chat_id=str(envelope.chat_id),
         message_id=str(envelope.message_id),
         markdown=button_row["markdown"],
@@ -337,7 +373,7 @@ async def begin_generation(
         connection,
         """
         SELECT id, call_key, person_id, conversation_id, status, generation, generation_started_at,
-               generated_through_event_id, draft_id, stop_requested_at
+               generated_through_event_id, draft_id, stop_requested_at, command
         FROM turn WHERE id = %s FOR UPDATE
         """,
         (turn_id,),
@@ -377,6 +413,7 @@ async def begin_generation(
         through_event_id=through,
         draft_id=draft_id,
         stop_requested=turn["stop_requested_at"] is not None,
+        command=turn["command"],
     )
 
 
@@ -450,6 +487,26 @@ async def load_turn_input(
         chat_id=events[-1].external_chat_id,
         events=events,
         window=window,
+        profile=await load_profile_state(
+            connection, plan.person_id, window_start=window[0].occurred_at if window else None
+        ),
+    )
+
+
+async def load_profile_state(
+    connection: AsyncConnection, person_id: int, *, window_start: datetime | None
+) -> ProfileState:
+    removed = (
+        await profile_store.removed_since(connection, person_id, window_start)
+        if window_start is not None
+        else []
+    )
+    return ProfileState(
+        active=await profile_store.entries(connection, person_id, "active"),
+        drafts=await profile_store.entries(connection, person_id, "draft"),
+        pending=await profile_store.entries(connection, person_id, "pending"),
+        intro=await profile_store.introduction(connection, person_id),
+        removed=removed,
     )
 
 
@@ -619,8 +676,9 @@ async def commit_turn(
             await connection.execute(
                 """
                 INSERT INTO reply_button (
-                    person_id, turn_id, outbox_id, token, label, position, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    person_id, turn_id, outbox_id, token, label, position, created_at, action,
+                    target_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     plan.person_id,
@@ -630,6 +688,8 @@ async def commit_turn(
                     reply.label,
                     reply.position,
                     now,
+                    reply.action,
+                    reply.target_id,
                 ),
             )
         if item.poll is not None:

@@ -59,6 +59,9 @@ class FakeTelegramServer:
         # Responses to return instead of success, per method, in order.
         self.failures: dict[str, list[httpx2.Response]] = {}
         self.requests: list[httpx2.Request] = []
+        self.bot_names: list[str] = []
+        self.commands: list[dict[str, str]] = []
+        self.command_updates = 0
         self._next_message_id = 5000
 
     def handler(self, request: httpx2.Request) -> httpx2.Response:
@@ -96,6 +99,15 @@ class FakeTelegramServer:
             return _ok(True)
         if method == "getMe":
             return _ok({"id": 42, "is_bot": True})
+        if method == "setMyName":
+            self.bot_names.append(body["name"])
+            return _ok(True)
+        if method == "getMyCommands":
+            return _ok(list(self.commands))
+        if method == "setMyCommands":
+            self.commands = list(body["commands"])
+            self.command_updates += 1
+            return _ok(True)
         return httpx2.Response(404, json={"ok": False, "error_code": 404})
 
     def api(self) -> TelegramApi:

@@ -21,6 +21,7 @@ from personal_agent.db.pool import create_pool
 from personal_agent.logging_setup import configure_logging
 from personal_agent.settings import SettingsError, WorkerSettings, load_worker_settings
 from personal_agent.telegram.api import TelegramApi, TelegramError
+from personal_agent.telegram.commands import sync_commands
 from personal_agent.telegram.drafts import Drafts
 from personal_agent.telegram.poller import Poller
 from personal_agent.telegram.sender import Sender
@@ -75,6 +76,7 @@ async def run(settings: WorkerSettings) -> int:
         await pool.open(wait=True, timeout=10)
         if not await _check_services(telegram, gateway):
             return EXIT_CONFIG
+        await sync_commands(telegram)
         turn_wakeup = asyncio.Event()
         outbox_wakeup = asyncio.Event()
         runner = TurnRunner(

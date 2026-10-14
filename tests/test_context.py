@@ -10,6 +10,8 @@ from personal_agent.conversation.context import (
     select_window,
 )
 from personal_agent.conversation.models import EventRow, GenerationPlan, MessageRow, TurnInput
+from personal_agent.profile.render import ProfileState
+from personal_agent.profile.store import Entry, Introduction
 from tests.fakes import START
 
 
@@ -124,6 +126,44 @@ def test_instructions_are_the_persona_then_the_telegram_guide() -> None:
     assert "You are writing in Telegram." in instructions
     assert instructions.index("Telegram Rich Markdown") > instructions.index("How to talk:")
     assert "Plain text only" not in instructions
+
+
+def _entry(field: str, value: str, status: str = "active") -> Entry:
+    return Entry(1, field, value, status, START if status == "active" else None, 1)
+
+
+def test_the_confirmed_profile_follows_the_guide_and_stays_stable() -> None:
+    active = [_entry("address", "Sam"), _entry("assistant_name", "Nara")]
+
+    instructions = reply_instructions(active)
+
+    assert instructions.startswith(reply_instructions().rstrip())
+    assert instructions.index("# The owner's profile") > instructions.index(
+        "Telegram Rich Markdown"
+    )
+    assert "- Your name: Nara" in instructions and "- Call the owner: Sam" in instructions
+    assert reply_instructions(list(active)) == instructions
+
+
+def test_drafts_and_pending_changes_stay_out_of_the_instructions() -> None:
+    plan = GenerationPlan(1, "key", 1, 1, 1, START, 1)
+    profile = ProfileState(
+        active=[],
+        drafts=[_entry("address", "Sam", "draft")],
+        pending=[_entry("reply_style", "Short", "pending")],
+        intro=Introduction("active", ()),
+        removed=[],
+    )
+    turn = TurnInput(plan, "Asia/Jakarta", "1001", [_event(1, "Sam")], [], profile)
+
+    request = build_reply_request(
+        turn, window_budget_tokens=6_000, offline_after=timedelta(hours=1)
+    )
+
+    assert request.instructions == reply_instructions()
+    note = request.input[-2]["content"]
+    assert "Answered so far: What to call you: Sam." in note
+    assert "Waiting for the owner to confirm: Reply style: Short." in note
 
 
 def test_button_presses_and_votes_are_answers_not_unreadable_media() -> None:

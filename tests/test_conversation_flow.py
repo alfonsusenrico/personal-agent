@@ -493,7 +493,7 @@ async def test_crash_before_storing_redelivers_the_update(
     monkeypatch.setattr(poller_module, "ingest", flaky_ingest)
     with pytest.raises(psycopg.OperationalError):
         await agent.receive(message_update(1, "don't lose me", date=clock.now))
-    await agent.poller.poll_once()
+    await agent.receive()
     await agent.settle()
 
     assert agent.server.sent_texts == ["Okay."]
