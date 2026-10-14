@@ -115,17 +115,18 @@ def context_lines(state: ProfileState, *, tz: str) -> list[str]:
     topics = ", ".join(f"{LABELS[name]} ({name})" for name in state.open_topics)
     if state.asking_now:
         lines.append(
-            "The owner asked you (with /start) to get to know them now. After responding to "
-            f"their latest message, ask one short, friendly question about one of: {topics}, "
-            'and mark it with <pa-ask field="..."/>. If they have moved on to something '
-            "else, follow them and ask nothing."
+            "The owner asked you (with /start) to get to know them now, so this is what they "
+            "want: after responding to their latest message, ask one short, friendly question "
+            f'about the first of: {topics}, marked with <pa-ask field="..."/>. Keep doing '
+            "this in every reply while they answer; only when they move on to something else, "
+            "follow them and ask nothing."
         )
     else:
         lines.append(
-            f"You don't know yet: {topics}. Only at a natural moment (small talk, a greeting, "
-            "or just after you finished helping) and never while the owner is in the middle "
-            "of something, you may add one light, optional question about one of them after "
-            'your answer, marked with <pa-ask field="..."/>. Otherwise ask nothing.'
+            f"You don't know yet: {topics}. If this is a natural moment (a greeting, small "
+            "talk, or just after you finished helping), add one light, optional question "
+            'about one of them after your answer, marked with <pa-ask field="..."/>. If '
+            "the owner is in the middle of something, ask nothing."
         )
     if "timezone" in state.open_topics:
         lines.append(
