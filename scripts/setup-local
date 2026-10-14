@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Create a local .env from .env.example with a generated database password; never overwrites.
+# Create a local .env from .env.example with generated database and backup passwords and
+# the backup folder; never overwrites.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,11 +10,18 @@ if [[ -e .env ]]; then
 fi
 
 password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+restic_password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+backup_dir="${HOME}/.local/share/personal-agent/backups"
 port="54331"
 umask 077
+mkdir -p "$backup_dir"
+chmod 700 "$backup_dir"
 sed \
+  -e "s|^BACKUP_DIR=.*|BACKUP_DIR=${backup_dir}|" \
+  -e "s|^RESTIC_PASSWORD=.*|RESTIC_PASSWORD=${restic_password}|" \
   -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${password}|" \
   -e "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://personal_agent:${password}@127.0.0.1:${port}/personal_agent|" \
   -e "s|^TEST_DATABASE_URL=.*|TEST_DATABASE_URL=postgresql://personal_agent:${password}@127.0.0.1:${port}/personal_agent|" \
   .env.example > .env
-echo "Created .env with a generated local database password."
+echo "Created .env with generated database and backup passwords."
+echo "Copy RESTIC_PASSWORD from .env into a password manager: without it the backups cannot be read."

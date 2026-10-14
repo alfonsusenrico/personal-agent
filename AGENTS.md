@@ -35,6 +35,8 @@ uv run ruff format                     # apply formatting
 docker compose up --build migrate      # apply migrations to the local database
 ./scripts/test -q tests/test_context.py   # pytest with the local test settings from .env
 ./scripts/converse                     # conversation scripts on the gateway stub (free)
+./scripts/review --summary             # open flag counts and backup age (agents: --summary only)
+./scripts/restore-check                # restore the newest backup into a throwaway database
 REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free stub replies
 ```
 
@@ -72,6 +74,14 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   - `actions.py`: Undo and Remove, run in the press's transaction.
   - `render.py`: "Saved:" lines, `/profile`, the instructions section, and
     the per-turn notes (open topics only when pacing allows).
+- `src/personal_agent/feedback/`: reply feedback on `message` rows, never on
+  a channel's message (`store.py`), and the local review (`review.py`).
+  Channels map their own gesture in their update parser (Telegram: 👎 and
+  `/note` in `telegram/updates.py`).
+- `src/personal_agent/backup/`: restic commands (`restic.py`), the daily
+  backup service (`service.py`), and the restore check (`restore_check.py`).
+  They run in the image's `backup` target, which adds `restic` and a
+  PostgreSQL 16 client.
 - `src/personal_agent/gateway/calls.py`: call IDs
   (`pa:{turn.call_key}:{purpose}:{generation}:a{attempt}`), retries after
   `execution_unknown`, and content-free `model_call` records.
@@ -103,6 +113,10 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
 - Put the current date, time, and timezone in a per-turn context message on
   every turn; the model does not know them. Never put them in the
   instructions: a changing prefix defeats prompt caching.
+- Agents run `./scripts/review` only with `--summary`: the full review prints
+  the owner's messages and belongs on the owner's own terminal.
+- Feedback and other owner gestures are stored channel-neutral; each channel
+  maps its own mechanism to them.
 - Migrations run as the compose `migrate` step, never at startup. An
   applied migration file never changes.
 - The repository is public on GitHub. Tracked files hold no secrets, no
