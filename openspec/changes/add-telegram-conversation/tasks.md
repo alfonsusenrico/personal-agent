@@ -105,7 +105,7 @@ the gateway stub.
 
 ## 6. Live verification (owner-authorised; needs the bot token and gateway keys)
 
-- [ ] 6.1 Run `./scripts/check`. Then, on Telegram with gpt-6-luna, on the
+- [x] 6.1 Run `./scripts/check`. Then, on Telegram with gpt-6-luna, on the
   owner's phone and desktop:
   - a burst merge, a follow-up while a draft is visible, edits before and
     after the answer, a voice note and a photo with a caption, a forwarded

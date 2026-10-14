@@ -2,7 +2,8 @@
 
 Status: the plain-text version and the Telegram output (tasks 5.1-5.7, 6.3)
 are verified locally. The live Telegram check with the owner (6.1) passed on
-the desktop client; the items under "Not verified yet" were not done live.
+desktop and Android; the items under "Not verified yet" were not done live
+and were accepted by the owner as covered by tests and scripted runs.
 
 Branch `feat/telegram-conversation`, working tree on top of `main` at
 `7ef1199`, 2026-10-13. Local only: macOS host, Docker Compose, Postgres 16
@@ -133,7 +134,7 @@ Formatting choices in the paid run (medium):
 - Prompt caching now works: the guide makes the stable prefix longer than the
   provider's minimum (for example 1,474 of 1,670 input tokens cached).
 
-## Live Telegram check (task 6.1)
+## Live Telegram check (task 6.1, done)
 
 Owner's desktop client, real model, 2026-10-13.
 
@@ -248,6 +249,15 @@ Owner's desktop client, real model, 2026-10-13.
     "show me a picture of cat you found on internet" got an honest "can't
     browse", no invented image; a Google search link with "show me this
     image" was declined as not an image link.
+  - On `80b2835` (turns 34-42, USD 0.002921): "dislike this message" got a
+    👎 reaction on the owner's message and no message; "react this message
+    with fire" got a 🔥 reaction; "send fire effect" sent 🔥 with the
+    effect; a direct image link with "show me this image" came back as the
+    image; "send me message with a lot of effects" sent one message with the
+    celebrate effect (Telegram allows one; the two extra effect tags were
+    dropped and logged). No warning or error in the log.
+- Totals for the live check: 42 turns, 44 model calls, USD 0.012973; 40
+  outbox rows, all sent, no plain-text fallback.
 - Owner decisions, 2026-10-13: Telegram reply keyboards are not needed now
   (inline quick replies are enough; the question was a test), and a mixed
   English and Indonesian message answered mostly in Indonesian is accepted.
@@ -255,9 +265,9 @@ Owner's desktop client, real model, 2026-10-13.
 ## Not verified yet
 
 - Parts of task 6.1 not done live (covered only by tests and paid scripted
-  runs): a voice note, an edit before the answer (too fast to do by hand), a
-  follow-up merged into a running turn, the like and poop effects, a direct
-  image link from the chat, and "dislike this message" on the final
-  revision.
+  runs): a voice note (the owner could not record one; accepted as covered
+  by `voice-note` and the unreadable-media tests), an edit before the answer
+  (too fast to do by hand), a follow-up merged into a running turn, and the
+  like and poop effects.
 - Long-running behaviour (days of use, the window growing to its budget) and
   laptop sleep during a call.
