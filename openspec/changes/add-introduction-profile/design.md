@@ -71,7 +71,10 @@ Table `profile_entry` (migration `0004`): `person_id`, `field`, `value`,
   `superseded_at`, and the new row becomes `active` with `confirmed_at`, in
   one transaction.
 - **Remove:** deletes every row of that person and field (owner decision).
-  The source messages stay in the message log.
+  The source messages stay in the message log. A `profile_removal` row keeps
+  only the field and the time, so while messages that mention the removed
+  value are still in the recent window, the context note tells the model not
+  to use them.
 - **Timezone:** confirming a `timezone` entry also sets `person.timezone` in
   the same transaction, so the poller keeps reading one column; removing it
   sets `person.timezone` back to NULL (the fallback).
@@ -94,10 +97,18 @@ Table `introduction`: `person_id` (primary key), `state` (`offered`,
   profile.
 - **Later:** state `declined`; never offered again.
 - **While `active`:** the context note lists answered topics (with their
-  draft values), skipped topics, and the next topic, and tells the model to
-  ask one question at a time and to mark each answer with the directive. A
-  skipped topic gets no draft. After the last topic, or when the owner asks
-  to finish, the model writes a short lead-in and code appends the summary.
+  draft values), skipped topics, and the open topics in order. An answer is
+  stored only with the reply, so the note says: if the latest message
+  answers the first open topic, mark it and ask about the next; otherwise ask
+  about the first. For the timezone it asks the model to confirm the current
+  one. A skipped topic gets no draft.
+- **Summary:** code appends it when the last open topic is answered, after
+  any change once all topics are done, or when the model writes
+  `<pa-intro-summary/>`; never on the reply to an Edit press, which only
+  asks what to change. Finishing early (the model's `<pa-intro-summary/>`
+  with topics still open) skips those topics, so Edit afterwards changes an
+  answer instead of resuming the questions. The first paid run found this:
+  after Edit the model went back to asking about the next topic.
 - **Stopping halfway:** drafts stay; normal chat continues with the context
   note offering nothing further; `/start` resumes with the remaining topics.
 
@@ -111,7 +122,12 @@ introduction active and asks the model which item to change.
 `/profile` is answered without a model call: one line per active entry with
 its label, value, and local date set, a Remove button per entry, and a line
 saying that changes can be stated in the chat. With no entries it says the
-profile is empty and offers `/start`.
+profile is empty and offers `/start`. It is a command event in a turn of its
+own (`turn.command`), which no other message joins; the stored assistant
+message is a placeholder, so profile values do not stay in the recent window
+after a removal. A message from Remove leaves the other Remove buttons of
+that list unusable (one action per message); `/profile` again shows a fresh
+list.
 
 Rejected: model-written summaries (they can paraphrase or drop a value the
 owner then saves unseen).
@@ -165,7 +181,10 @@ the per-turn context note, so an unconfirmed value never shapes replies.
 - `profile_entry` and `introduction` as above, each with `person_id`.
 - `reply_button.action`, `reply_button.target_id`, with a check that
   `target_id` is set for actions that need one.
-- `outbox.kind` gains `bot_name`.
+- `outbox.kind` gains `bot_name`; `turn_id` and `message_id` become optional
+  for that kind only.
+- `profile_removal` (field and time only), `turn.command`, and the
+  `command` kind of `inbound_event`.
 
 Forward-only and additive; existing rows are untouched. Rollback is the
 previous image: it ignores the new tables and columns.

@@ -18,6 +18,7 @@ Early development; everything runs locally for now.
 |---|---|
 | Bootstrap: settings, logging, migrations, checks | Done |
 | Telegram conversation through the gateway | Done (local) |
+| Introduction and profile (names, language, style) | Done (local) |
 | Reliable long-term memory | Planned |
 | Gmail and Google Calendar sync (read-only) | Planned |
 | Learning your apps' APIs (read-only) | Planned |
@@ -89,7 +90,18 @@ How it behaves:
 - Messages sent within 2 seconds of each other are answered as one reply. A
   message sent while it is still thinking makes it reconsider, at most once.
 - It replies in the language of your latest message and knows the current
-  date and time (`DEFAULT_TIMEZONE`, Asia/Jakarta unless set).
+  date and time (`DEFAULT_TIMEZONE`, Asia/Jakarta unless set, or the
+  timezone you confirmed).
+- **Introduction:** after your first message it offers a short introduction
+  once (Start or Later; `/start` begins or resumes it any time): what to call
+  you, its name, language, reply style, timezone, work or study, routine, and
+  interests, one skippable question at a time. A summary of exactly what will
+  be stored ends it; nothing counts until you press Save, which also renames
+  the bot on Telegram.
+- **Profile:** when you state a change ("call me Sam from now on"), it asks
+  and shows the value with Confirm and Cancel; only Confirm saves it.
+  `/profile` lists what it knows with a Remove button per entry. A change
+  keeps the old value as history; Remove deletes every version.
 - After being offline it answers what it missed and mentions the delay;
   edited messages are answered again; photos, voice notes, and files get an
   honest "can't open this yet".
