@@ -124,19 +124,12 @@ non-anonymous poll whose vote returns as the owner's answer, and embed images
 or files by URL. A media URL SHALL be embedded only if it already appeared in
 an owner message in the turn or the recent window; other media SHALL be
 removed. Invalid directives SHALL be dropped, and a send rejected for its
-effect SHALL be retried without the effect. An effect written without a
-message SHALL be sent on the effect's own emoji.
+effect SHALL be retried without the effect.
 
 #### Scenario: Thanks
 
 - **WHEN** the owner writes "thanks, got it"
 - **THEN** the assistant may react with 👍 and send no message
-
-#### Scenario: Effect without a message
-
-- **WHEN** a reply is only the dislike effect, with no text
-- **THEN** the assistant sends 👎 with the dislike effect instead of failing
-  the turn
 
 #### Scenario: Invented image
 
@@ -147,6 +140,17 @@ message SHALL be sent on the effect's own emoji.
 
 - **WHEN** the owner votes in a poll the assistant sent
 - **THEN** the vote is recorded as the owner's answer and answered
+
+### Requirement: An effect always plays on a message
+
+A message effect SHALL be sent on a message. When a reply has an effect but
+no text, the assistant SHALL send the effect's own emoji as the message.
+
+#### Scenario: Effect without a message
+
+- **WHEN** a reply is only the dislike effect, with no text
+- **THEN** the assistant sends 👎 with the dislike effect instead of failing
+  the turn
 
 ### Requirement: Stop discards the reply
 
