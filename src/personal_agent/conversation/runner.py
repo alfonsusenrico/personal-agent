@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -91,6 +91,7 @@ class TurnRunner:
         clock: Clock,
         drafts: Drafts,
         on_answer: Callable[[], None],
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._pool = pool
         self._responses = responses
@@ -98,6 +99,7 @@ class TurnRunner:
         self._clock = clock
         self._drafts = drafts
         self._on_answer = on_answer
+        self._sleep = sleep
         self._active: tuple[int, asyncio.Task[CallOutcome]] | None = None
         self._stopping: int | None = None
 
@@ -202,7 +204,12 @@ class TurnRunner:
         async with self._drafts(turn_input.chat_id, plan.draft_id) as draft:
             task = asyncio.create_task(
                 run_call(
-                    self._pool, self._responses, request, clock=self._clock, on_text=draft.update
+                    self._pool,
+                    self._responses,
+                    request,
+                    clock=self._clock,
+                    on_text=draft.update,
+                    sleep=self._sleep,
                 )
             )
             self._active = (plan.turn_id, task)

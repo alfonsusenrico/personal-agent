@@ -51,6 +51,13 @@ the assistant recording that it was sent.
   replying, and then restarts
 - **THEN** the owner receives exactly one reply to that message
 
+#### Scenario: Restart while the reply is still being written
+
+- **WHEN** the worker stops while the gateway is still running the reply call,
+  and then restarts
+- **THEN** the assistant waits for that call to finish and sends its result
+  as the one reply, without paying for the call again
+
 #### Scenario: Restart after the reply was prepared
 
 - **WHEN** the worker stops after preparing a reply but before sending it

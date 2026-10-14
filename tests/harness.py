@@ -49,6 +49,7 @@ class Agent[R: Responses]:
             clock=clock,
             drafts=self.drafts,
             on_answer=lambda: None,
+            sleep=self._sleep,
         )
         self.poller = Poller(
             pool,

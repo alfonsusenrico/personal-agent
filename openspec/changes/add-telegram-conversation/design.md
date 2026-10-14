@@ -159,6 +159,15 @@ On restart:
   frozen when it starts (the events it covers and its start time, which is
   the "current time" in the context note), so a restart rebuilds an identical
   request and resubmits the same ID, which the gateway replays for free.
+  If the old process stopped while the gateway was still running the call,
+  the gateway answers `call_in_progress` until that run ends. The agent then
+  resubmits the same ID every 5 seconds for up to 300 seconds, which covers
+  the gateway's 180-second call deadline and 240-second lease, and takes the
+  replay. A call row recorded as `stopped` by the shutdown is updated with
+  the replayed outcome. The client's own retries for `call_in_progress` (4
+  attempts, a few seconds) are too short for a reply still being written;
+  the live restart check found this, when the restarted worker sent the
+  apology while the gateway was still writing.
 - **Gateway fields:** `operation` is `reply`, so the gateway ledger shows cost
   by purpose. `prompt_cache_key` is `person-{person_id}`.
 - **Failures:**

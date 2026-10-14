@@ -3,10 +3,12 @@ gateway, and a controllable clock."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 import psycopg
@@ -15,6 +17,7 @@ from llm_gateway_client import (
     BudgetExhaustedError,
     Completed,
     ExecutionUnknownError,
+    RetryableError,
     StreamEvent,
 )
 from psycopg import sql
@@ -226,6 +229,93 @@ async def test_restart_mid_generation_replays_the_same_call(
     assert [call["provider_call_id"] for call in responses.calls] == [first_call] * 2
     replayed = await _rows(pool, "SELECT call_id, replayed FROM model_call")
     assert replayed == [(first_call, True)]
+
+
+class _ShutDownMidStream:
+    """The worker is shut down while the gateway is still writing the reply."""
+
+    def __init__(self, inner: FakeResponses) -> None:
+        self._inner = inner
+        self.streaming = asyncio.Event()
+
+    async def stream(self, **kwargs: Any) -> AsyncIterator[StreamEvent]:
+        async for event in self._inner.stream(**kwargs):
+            if isinstance(event, Completed):
+                self.streaming.set()
+                await asyncio.Event().wait()
+            yield event
+
+
+class _StillRunning:
+    """The gateway answers call_in_progress while the first run of a call ID goes on."""
+
+    def __init__(self, inner: FakeResponses, answers: int) -> None:
+        self._inner = inner
+        self._answers = answers
+        self.refused: list[str] = []
+
+    async def stream(self, **kwargs: Any) -> AsyncIterator[StreamEvent]:
+        if len(self.refused) < self._answers:
+            self.refused.append(kwargs["provider_call_id"])
+            raise RetryableError("call_in_progress", status=409, retry_after_seconds=2)
+        async for event in self._inner.stream(**kwargs):
+            yield event
+
+
+async def _shut_down_mid_stream(
+    pool: AsyncConnectionPool,
+    server: FakeTelegramServer,
+    responses: FakeResponses,
+    clock: FakeClock,
+) -> None:
+    gateway = _ShutDownMidStream(responses)
+    stopping = Agent(pool, server, responses, clock, gateway=gateway)
+    await stopping.receive(message_update(1, "explain vaccines in detail", date=clock.now))
+    clock.advance(3)
+    step = asyncio.create_task(stopping.runner.step())
+    await gateway.streaming.wait()
+    step.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await step
+
+
+async def test_restart_while_the_gateway_still_runs_the_call_waits_for_it(
+    pool: AsyncConnectionPool,
+    server: FakeTelegramServer,
+    responses: FakeResponses,
+    clock: FakeClock,
+) -> None:
+    await _shut_down_mid_stream(pool, server, responses, clock)
+    gateway = _StillRunning(responses, answers=3)
+
+    restarted = Agent(pool, server, responses, clock, gateway=gateway)
+    await restarted.settle()
+
+    assert server.sent_texts == ["Okay."]
+    first_call = await _call_id(pool, generation=1, attempt=1)
+    assert gateway.refused == [first_call] * 3
+    assert [call["provider_call_id"] for call in responses.calls] == [first_call] * 2
+    calls = await _rows(pool, "SELECT call_id, status, replayed, cost_usd FROM model_call")
+    assert calls == [(first_call, "completed", True, Decimal("0.000150"))]
+
+
+async def test_a_call_that_never_finishes_is_given_up_with_the_apology(
+    pool: AsyncConnectionPool,
+    server: FakeTelegramServer,
+    responses: FakeResponses,
+    clock: FakeClock,
+) -> None:
+    await _shut_down_mid_stream(pool, server, responses, clock)
+    gateway = _StillRunning(responses, answers=1_000)
+
+    restarted = Agent(pool, server, responses, clock, gateway=gateway)
+    await restarted.settle()
+
+    assert server.sent_texts == [notices.APOLOGY]
+    assert 300 <= sum(restarted.sleeps) <= 310
+    assert await _rows(pool, "SELECT status, failure_code FROM turn") == [
+        ("failed", "call_in_progress")
+    ]
 
 
 async def test_replies_know_the_owner_time(agent: Agent, clock: FakeClock) -> None:
