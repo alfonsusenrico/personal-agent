@@ -1,0 +1,16 @@
+name: requested-effect
+description: Effects asked for by name ride on a message, so every reply is sent.
+steps:
+  - send: "send me a message with fire effect"
+  - settle: true
+  - wait: 20
+  - send: "dislike this message"
+fake_replies:
+  - "<pa-effect name=\"fire\"/>🔥"
+  - "<pa-effect name=\"dislike\"/>"
+expect:
+  turns: 2
+  turn_statuses: [answered, answered]
+expect_fake:
+  sent_methods: [sendRichMessage, sendRichMessage]
+  sent_contains: ["[with an effect]"]

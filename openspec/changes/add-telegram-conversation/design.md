@@ -334,7 +334,11 @@ sender removes them from the text and performs them:
 - `<pa-effect name="celebrate"/>`: a message effect from a fixed map
   (celebrate, love, like, fire, dislike, poop). The IDs are the commonly used
   ones and are verified live; a send rejected for its effect is retried
-  without it.
+  without it. An effect plays on a message, so a reply that is only an
+  effect is sent on the effect's own emoji (🎉 ❤️ 👍 🔥 👎 💩) rather than
+  failing as empty. The live phone check found the model answering "dislike
+  this message" with the effect tag alone; the guide now says to write a
+  message with every effect.
 - `<pa-poll question="..." multiple="false"><option>...</option></pa-poll>`:
   a non-anonymous `sendPoll` after the message (1-12 options, question up to
   300 characters), so the owner's vote comes back.

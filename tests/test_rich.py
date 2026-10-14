@@ -3,6 +3,7 @@ from __future__ import annotations
 from itertools import count
 
 from personal_agent.telegram.rich import (
+    EFFECT_EMOJI,
     EFFECTS,
     draft_view,
     mark_chosen,
@@ -56,6 +57,15 @@ def test_effect_must_be_a_known_name() -> None:
     assert good.effect == "celebrate" and "celebrate" in EFFECTS
     assert good.chunks == ["Congrats!"]
     assert bad.effect is None and bad.dropped == {"effect": 1}
+
+
+def test_an_effect_without_text_is_sent_on_its_own_emoji() -> None:
+    rendered = render_reply('<pa-effect name="dislike"/>', shared_urls=set())
+
+    assert rendered.effect == "dislike"
+    assert rendered.chunks == ["👎"]
+    assert rendered.stored == '<pa-effect name="dislike"/>👎'
+    assert set(EFFECT_EMOJI) == set(EFFECTS)
 
 
 def test_poll_is_parsed_and_removed_from_the_message() -> None:
