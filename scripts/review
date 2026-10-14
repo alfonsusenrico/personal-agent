@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Review flagged replies and the newest backup's age; arguments go to the review
+# (--summary, close <id> test|dismissed). Runs in the backup image, which has the
+# database settings and restic. Without --summary it prints the owner's messages:
+# agents run only --summary.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec docker compose run --rm --quiet-pull -T backup personal-agent-review "$@"

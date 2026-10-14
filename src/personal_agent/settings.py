@@ -71,7 +71,9 @@ class WorkerSettings(Settings):
         return value
 
 
-def _load[T: Settings](settings_class: type[T]) -> T:
+def load[T: Settings](settings_class: type[T]) -> T:
+    """Load a settings class from the environment or stop with the names of invalid
+    variables."""
     try:
         settings = settings_class()  # pyright: ignore[reportCallIssue]  # values come from the environment
     except ValidationError as exc:
@@ -84,9 +86,9 @@ def _load[T: Settings](settings_class: type[T]) -> T:
 
 def load_settings() -> Settings:
     """Load settings from the environment or stop with the names of invalid variables."""
-    return _load(Settings)
+    return load(Settings)
 
 
 def load_worker_settings() -> WorkerSettings:
     """Load the worker's settings or stop with the names of invalid variables."""
-    return _load(WorkerSettings)
+    return load(WorkerSettings)
