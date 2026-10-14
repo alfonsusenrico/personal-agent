@@ -27,7 +27,12 @@ from personal_agent.profile.render import (
     summary_buttons,
     summary_text,
 )
-from personal_agent.telegram.rich import QuickReply, RenderedReply, new_button_token
+from personal_agent.telegram.rich import (
+    QuickReply,
+    RenderedReply,
+    new_button_token,
+    without_quick_replies,
+)
 
 
 def _edit_pressed(turn: TurnInput) -> bool:
@@ -40,10 +45,15 @@ def with_buttons(
     text: str | None,
     buttons: list[list[Button]],
     new_token: Callable[[], str] = new_button_token,
+    *,
+    only_these: bool = False,
 ) -> list[OutgoingItem]:
-    """Add text and rows of action buttons to the last rich message, or send them alone."""
+    """Add text and rows of action buttons to the last rich message, or send them alone.
+    `only_these` removes the model's own quick replies from that message first."""
     last = max((index for index, item in enumerate(items) if item.kind == "rich"), default=None)
     base = items[last] if last is not None else None
+    if base is not None and only_these and base.quick_replies:
+        base = OutgoingItem("rich", without_quick_replies(base.text or ""), dict(base.payload))
     replies = list(base.quick_replies) if base is not None else []
     rows = []
     for row in buttons:
@@ -136,5 +146,7 @@ async def apply_reply(
         )
     has_message = any(item.kind == "rich" for item in items)
     if intro is None and has_message and await store.mark_offered(connection, person_id, now):
-        items = with_buttons(items, None, [offer_buttons(person_id)], new_token)
+        # A choice the model wrote itself next to the offer would look like Start but
+        # start nothing.
+        items = with_buttons(items, None, [offer_buttons(person_id)], new_token, only_these=True)
     return items

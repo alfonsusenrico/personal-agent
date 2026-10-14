@@ -140,6 +140,24 @@ async def test_the_offer_comes_once_and_later_declines_it(
     assert "tg-button" not in agent.server.sent_texts[-1]
 
 
+async def test_the_offer_keeps_only_the_buttons_that_start_it(
+    agent: Agent[FakeResponses], pool: AsyncConnectionPool
+) -> None:
+    agent.responses.script = [
+        "Halo! Mau mulai perkenalan singkat?\n<tg-button-row>"
+        '<tg-button type="callback_data" data="go">Mulai</tg-button>'
+        '<tg-button type="callback_data" data="later">Nanti</tg-button>'
+        "</tg-button-row>"
+    ]
+    await _say(agent, 1, "halo")
+
+    sent = agent.server.sent_texts[0]
+    assert "Mulai" not in sent and "Nanti" not in sent
+    assert "Start introduction" in sent
+    labels = await _rows(pool, "SELECT label, action FROM reply_button ORDER BY id")
+    assert labels == [("Start introduction", "intro_start"), ("Later", "intro_later")]
+
+
 async def test_the_introduction_counts_only_after_save(
     agent: Agent[FakeResponses], pool: AsyncConnectionPool
 ) -> None:

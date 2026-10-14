@@ -400,13 +400,17 @@ def draft_view(partial: str) -> str:
     return _DANGLING_LIST_MARKER.sub("", text.strip())
 
 
-def mark_chosen(markdown: str, label: str) -> str:
-    """The sent message with its quick replies replaced by the chosen option."""
+def without_quick_replies(markdown: str) -> str:
+    """The message with its quick-reply buttons (and rows left empty) removed."""
     without = re.sub(
         r'<tg-button type="callback_data"[^>]*>.*?</tg-button>', "", markdown, flags=re.DOTALL
     )
-    without = _EMPTY_ROW.sub("", without).rstrip()
-    return f"{without}\n\n✓ {label}".strip()
+    return _EMPTY_ROW.sub("", without).rstrip()
+
+
+def mark_chosen(markdown: str, label: str) -> str:
+    """The sent message with its quick replies replaced by the chosen option."""
+    return f"{without_quick_replies(markdown)}\n\n✓ {label}".strip()
 
 
 def to_plain(markdown: str) -> str:

@@ -120,7 +120,7 @@ def context_lines(state: ProfileState, *, offer_due: bool, tz: str) -> list[str]
         lines.append(
             "After answering, add one short sentence offering a quick introduction, so you "
             "can learn what to call the owner, your own name, and how they like replies. "
-            "Start and Later buttons are added for you."
+            "Start and Later buttons are added for you, so write no buttons of your own."
         )
     if state.intro_active and state.intro is not None:
         remaining = state.remaining_topics()
