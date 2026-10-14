@@ -22,4 +22,4 @@ fake_replies:
 expect:
   introduction_state: active
   pending_fields: []
-  context_contains: ["Answered so far: What to call you: Sam.", "Next topic: My name"]
+  context_contains: ["Answered so far: What to call you: Sam.", "Topics still open, in order: My name"]

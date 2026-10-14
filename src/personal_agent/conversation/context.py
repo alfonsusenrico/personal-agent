@@ -300,7 +300,9 @@ def build_reply_request(
                 now=now,
                 tz=turn.person_tz,
                 offline_after=offline_after,
-                profile_lines=context_lines(turn.profile, offer_due=offer_due(turn)),
+                profile_lines=context_lines(
+                    turn.profile, offer_due=offer_due(turn), tz=turn.person_tz
+                ),
             ),
         }
     )

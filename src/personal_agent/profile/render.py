@@ -113,7 +113,7 @@ def _listing(entries: list[Entry]) -> str:
     return "; ".join(f"{LABELS[entry.field]}: {entry.value}" for entry in entries)
 
 
-def context_lines(state: ProfileState, *, offer_due: bool) -> list[str]:
+def context_lines(state: ProfileState, *, offer_due: bool, tz: str) -> list[str]:
     """Per-turn notes about the introduction, waiting changes, and removals."""
     lines: list[str] = []
     if offer_due:
@@ -131,22 +131,28 @@ def context_lines(state: ProfileState, *, offer_due: bool) -> list[str]:
             skipped = ", ".join(LABELS[field] for field in FIELDS if field in state.intro.skipped)
             lines.append(f"Skipped: {skipped}.")
         if remaining:
+            topics = ", ".join(f"{LABELS[field]} ({field})" for field in remaining)
+            lines.append(f"Topics still open, in order: {topics}.")
             lines.append(
-                f"Next topic: {LABELS[remaining[0]]} (field {remaining[0]}). "
-                f"Still to ask after it: {', '.join(remaining[1:]) or 'nothing'}."
+                "If the owner's latest message answers the first open topic, mark it with "
+                '<pa-profile field="...">value</pa-profile> (or <pa-profile field="..." '
+                'skip="true"/> if they skip it) and ask about the next one; otherwise ask '
+                "about the first open topic. Ask one short question at a time. Acknowledge "
+                "an answer in a few words at most and do not repeat it back: the summary at "
+                "the end shows everything. When the owner wants to finish early, add "
+                "<pa-intro-summary/>; the summary with Save and Edit buttons is added for you."
             )
-            lines.append(
-                "Ask one short question about the next topic. Mark the owner's answer to the "
-                'previous question with <pa-profile field="...">value</pa-profile>, or '
-                '<pa-profile field="..." skip="true"/> if they skipped it. When the owner '
-                "wants to finish early, add <pa-intro-summary/>; the summary with Save and "
-                "Edit buttons is added for you."
-            )
+            if "timezone" in remaining[:2]:
+                lines.append(
+                    f"For the timezone, ask the owner to confirm {tz} (the local time above) "
+                    "or name the place they are in; mark it as an IANA name."
+                )
         else:
             lines.append(
-                "Every topic is answered. If the owner changes one, mark the new value; the "
-                "summary with Save and Edit buttons is added for you, so write only a short "
-                "lead-in to it."
+                "Every topic is answered. If the owner changes one, mark the new value. The "
+                "summary with Save and Edit buttons is added after a change, or when you add "
+                "<pa-intro-summary/> (do so when the owner has nothing more to change), so "
+                "write only a short lead-in to it."
             )
     if state.pending:
         lines.append(f"Waiting for the owner to confirm: {_listing(state.pending)}.")

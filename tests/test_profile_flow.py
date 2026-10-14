@@ -153,7 +153,9 @@ async def test_the_introduction_counts_only_after_save(
     await _press(agent, pool, 2, "Start introduction")
 
     assert "The introduction is in progress." in agent.responses.developer_note()
-    assert "Next topic: What to call you" in agent.responses.developer_note()
+    assert "Topics still open, in order: What to call you (address), My name" in (
+        agent.responses.developer_note()
+    )
     assert agent.responses.user_content().endswith("[pressed] Start introduction")
 
     await _say(agent, 3, "Sam. Call yourself Nara. English. Short. Jakarta. Engineer. 6am. skip")
@@ -196,6 +198,7 @@ async def test_edit_shows_a_new_summary_and_saves_nothing(
     await _press(agent, pool, 3, "Edit")
 
     assert "Every topic is answered." in agent.responses.developer_note()
+    assert agent.server.sent_texts[-1] == "Sure, what should change?"
 
     await _say(agent, 4, "call me Sammy instead")
 
@@ -217,7 +220,7 @@ async def test_start_resumes_with_the_answers_so_far(
 
     note = agent.responses.developer_note()
     assert "Answered so far: What to call you: Sam." in note
-    assert "Next topic: My name" in note
+    assert "Topics still open, in order: My name (assistant_name)" in note
 
 
 async def test_a_stated_change_waits_for_confirm(

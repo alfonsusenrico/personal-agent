@@ -19,10 +19,12 @@ fake_replies:
   - "Nice to meet you, Sam! And my name?<pa-profile field=\"address\">Sam</pa-profile>"
   - "Nara it is. Here's what I have.<pa-profile field=\"assistant_name\">Nara</pa-profile><pa-intro-summary/>"
   - "Sure, what should change?"
-  - "Sammy it is. Here's the updated summary.<pa-profile field=\"address\">Sammy</pa-profile><pa-intro-summary/>"
+  - "Sammy it is.<pa-profile field=\"address\">Sammy</pa-profile>"
 expect:
   introduction_state: completed
   profile_active:
     address: Sammy
     assistant_name: Nara
   bot_names: [Nara]
+expect_fake:
+  sent_contains: ["Skipped: Language", "**What to call you:** Sammy"]

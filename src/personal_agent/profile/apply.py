@@ -1,7 +1,8 @@
 """What a committed reply does to the profile, and the buttons code adds to it.
 
 During the introduction, marked values become drafts and the summary is added once
-no topic remains (or the model asks for it). Otherwise marked values become pending
+no topic remains; when the model asks for the summary early, the topics left are
+skipped. Otherwise marked values become pending
 changes with Confirm and Cancel. The introduction offer is added once.
 """
 
@@ -22,10 +23,16 @@ from personal_agent.profile.render import (
     confirm_buttons,
     confirmation_text,
     offer_buttons,
+    outcome_label,
     summary_buttons,
     summary_text,
 )
 from personal_agent.telegram.rich import QuickReply, RenderedReply, new_button_token
+
+
+def _edit_pressed(turn: TurnInput) -> bool:
+    edit = outcome_label("intro_edit")
+    return any(event.kind == "button" and event.text == edit for event in turn.events)
 
 
 def with_buttons(
@@ -73,6 +80,8 @@ async def apply_reply(
     sources = [event.id for event in turn.events]
     intro = await store.introduction(connection, person_id, lock=True)
     if intro is not None and intro.state == "active":
+        before = await store.entries(connection, person_id, "draft")
+        remaining_before = ProfileState([], before, [], intro, []).remaining_topics()
         for mark in rendered.profile:
             if mark.value is None:
                 await store.skip(connection, person_id, mark.field, now)
@@ -89,7 +98,17 @@ async def apply_reply(
         drafts = await store.entries(connection, person_id, "draft")
         current = await store.introduction(connection, person_id)
         state = ProfileState([], drafts, [], current, [])
-        if rendered.intro_summary or not state.remaining_topics():
+        if rendered.intro_summary:
+            # Finishing early skips what is left, so Edit changes an answer instead of
+            # resuming the questions.
+            for field in state.remaining_topics():
+                await store.skip(connection, person_id, field, now)
+            current = await store.introduction(connection, person_id)
+            state = ProfileState([], drafts, [], current, [])
+        # The summary follows a change, an explicit request, or the last answer; the
+        # reply to an Edit press only asks what to change.
+        show = rendered.intro_summary or bool(rendered.profile) or bool(remaining_before)
+        if show and not state.remaining_topics() and not _edit_pressed(turn):
             skipped = current.skipped if current is not None else ()
             return with_buttons(
                 items, summary_text(drafts, skipped), [summary_buttons(person_id)], new_token
