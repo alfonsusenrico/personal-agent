@@ -1,7 +1,7 @@
 # Verification: add-introduction-profile
 
-Status: tasks 1-5 are verified locally on the revised design (gradual
-learning, saved with Undo); the live Telegram check (6.1) is in progress.
+Status: verified locally on the revised design (gradual learning, saved
+with Undo); the owner accepted the live Telegram check on 2026-10-14.
 
 Branch `feat/introduction-profile` on top of `main` at `b92bb1a`,
 2026-10-14. Local only: macOS host, Docker Compose, Postgres 16, the local
@@ -87,6 +87,20 @@ explicit request, a name change held unsaved by the first version, was
 applied as the current address. The worker started on `dabc96e` and set
 the menu to `/start`, `/profile`, `/stop`.
 
-## Not verified yet
+## Live check (task 6.1)
 
-- Task 6.1, the live Telegram check with the owner on phone and desktop.
+Owner-run on Telegram Desktop, 2026-10-14, worker `dabc96e`, real model
+(`reply` profile). Accepted by the owner.
+
+| Check | Evidence | Result |
+|---|---|---|
+| Normal chat is answered, not steered | five turns (a dinner idea, a cooking follow-up, a request for steps, feedback); every reply answered the message; no getting-to-know question was asked (none recorded in `profile_topic`), which the design allows | Pass |
+| A stated preference is saved at once with Undo | the owner's feedback on formatting saved `reply_style` (one active entry), shown as "Saved: Reply style → …" with an Undo button in the same reply | Pass |
+| `/profile` answered by code | one `command` turn, no model call | Pass |
+| Bot name and menu | the chat header shows the name the owner chose; the menu button is present | Pass |
+| Cost | 5 model calls, all completed, none replayed: USD 0.001706 (about USD 0.00034 a turn), 16,931 input tokens of which 8,200 cached, 1,062 output (752 reasoning), average latency 3.95 s | Recorded |
+| Logs | 28 worker lines in the window, no warnings or errors; profile lines name the field only; no saved value or message text found | Pass |
+
+Not exercised live in this session, accepted by the owner on the strength of
+the tests and the paid scripts above: pressing Undo, pressing Remove,
+`/start` followed by a change of subject, and the phone client.

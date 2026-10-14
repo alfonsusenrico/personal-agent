@@ -77,12 +77,12 @@ saved visibly, and used without re-asking.
 
 ## 6. Live verification and delivery
 
-- [ ] 6.1 Owner-authorised live check on Telegram (phone and desktop): a
+- [x] 6.1 Owner-authorised live check on Telegram (phone and desktop): a
   first conversation where it learns something at a natural point, a topic
   jump after a question, a stated change with Undo, `/start`, `/profile` with
   Remove, the bot's name, the menu. Verify: results, per-turn cost, and a log
   scan with no profile value in `verification.md`.
-- [ ] 6.2 Run `./scripts/check`, open a PR for `feat/introduction-profile`,
+- [x] 6.2 Run `./scripts/check`, open a PR for `feat/introduction-profile`,
   and report its URL and the verification record; the owner merges.
 
 ## Workflow follow-up
