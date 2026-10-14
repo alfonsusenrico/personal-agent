@@ -40,6 +40,16 @@ def _edit_pressed(turn: TurnInput) -> bool:
     return any(event.kind == "button" and event.text == edit for event in turn.events)
 
 
+def _started_now(turn: TurnInput) -> bool:
+    """The turn begins the introduction: /start or the Start button."""
+    start = outcome_label("intro_start")
+    return any(
+        (event.kind == "message" and (event.text or "").strip().startswith("/start"))
+        or (event.kind == "button" and event.text == start)
+        for event in turn.events
+    )
+
+
 def with_buttons(
     items: list[OutgoingItem],
     text: str | None,
@@ -117,7 +127,13 @@ async def apply_reply(
             state = ProfileState([], drafts, [], current, [])
         # The summary follows a change, an explicit request, or the last answer; the
         # reply to an Edit press only asks what to change.
-        show = rendered.intro_summary or bool(rendered.profile) or bool(remaining_before)
+        # Restarting a completed introduction opens with nothing left to ask.
+        show = (
+            rendered.intro_summary
+            or bool(rendered.profile)
+            or bool(remaining_before)
+            or _started_now(turn)
+        )
         if show and not state.remaining_topics() and not _edit_pressed(turn):
             skipped = current.skipped if current is not None else ()
             return with_buttons(

@@ -57,34 +57,34 @@ class ProfileState:
         return [field for field in FIELDS if field not in answered]
 
 
-def _value_lines(entries: list[Entry]) -> list[str]:
-    return [f"**{LABELS[entry.field]}:** {entry.value}" for entry in entries]
-
-
+# Rich Markdown joins single line breaks into one paragraph, so stored values are
+# list items and blocks are separated by blank lines.
 def summary_text(drafts: list[Entry], skipped: tuple[str, ...]) -> str:
-    lines = _value_lines(drafts) or ["Nothing to save yet."]
+    blocks = [
+        "\n".join(f"- **{LABELS[entry.field]}:** {entry.value}" for entry in drafts)
+        or "Nothing to save yet."
+    ]
     if skipped:
         names = ", ".join(LABELS[field] for field in FIELDS if field in skipped)
-        lines.append(f"Skipped: {names}")
-    return "\n".join(lines)
+        blocks.append(f"Skipped: {names}")
+    return "\n\n".join(blocks)
 
 
 def confirmation_text(proposed: list[tuple[str, str]]) -> str:
     """The changes a reply proposes, as (field, value) pairs."""
-    return "\n".join(f"**{LABELS[field]}** → {value}" for field, value in proposed)
+    return "\n".join(f"- **{LABELS[field]}** → {value}" for field, value in proposed)
 
 
 def profile_text(active: list[Entry], tz: str) -> str:
     if not active:
         return EMPTY_PROFILE
     zone = ZoneInfo(tz)
-    lines = ["**Your profile**"]
+    lines = []
     for entry in active:
         confirmed = entry.confirmed_at
         date = f" · {confirmed.astimezone(zone):%-d %b %Y}" if confirmed else ""
-        lines.append(f"**{LABELS[entry.field]}:** {entry.value}{date}")
-    lines.append(CHANGE_HINT)
-    return "\n".join(lines)
+        lines.append(f"- **{LABELS[entry.field]}:** {entry.value}{date}")
+    return "\n\n".join(["**Your profile**", "\n".join(lines), CHANGE_HINT])
 
 
 def remove_buttons(active: list[Entry]) -> list[list[Button]]:
@@ -113,9 +113,16 @@ def _listing(entries: list[Entry]) -> str:
     return "; ".join(f"{LABELS[entry.field]}: {entry.value}" for entry in entries)
 
 
-def context_lines(state: ProfileState, *, offer_due: bool, tz: str) -> list[str]:
+def context_lines(
+    state: ProfileState, *, offer_due: bool, tz: str, just_saved: bool = False
+) -> list[str]:
     """Per-turn notes about the introduction, waiting changes, and removals."""
     lines: list[str] = []
+    if just_saved:
+        lines.append(
+            "The owner just saved the introduction. Reply with one short, warm sentence "
+            "that uses the saved names; do not list the profile again."
+        )
     if offer_due:
         lines.append(
             "After answering, add one short sentence offering a quick introduction, so you "
@@ -197,9 +204,12 @@ def offer_buttons(person_id: int) -> list[Button]:
     ]
 
 
+SAVE_LABEL = "Save"
+
+
 def summary_buttons(person_id: int) -> list[Button]:
     return [
-        Button("Save", "intro_save", person_id, primary=True),
+        Button(SAVE_LABEL, "intro_save", person_id, primary=True),
         Button("Edit", "intro_edit", person_id),
     ]
 

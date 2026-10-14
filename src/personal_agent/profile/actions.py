@@ -54,7 +54,8 @@ async def press(
         if changed is None:
             return _STALE
         await _rename_if_changed(connection, person_id, changed, now)
-        return ActionResult(True, label=outcome_label(action))
+        # The model closes the introduction in one sentence, under the new names.
+        return ActionResult(True, answerable=True, label=outcome_label(action))
     if action == "profile_confirm":
         changed = await store.confirm_pending(connection, person_id, target_id, now)
         if changed is None:

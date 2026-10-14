@@ -93,13 +93,19 @@ async def run(settings: WorkerSettings) -> int:
             drafts=Drafts(telegram, interval_seconds=settings.draft_interval_seconds),
             on_answer=outbox_wakeup.set,
         )
+
+        def on_stored() -> None:
+            # A stored press can queue an outbox row on its own (the bot's name).
+            turn_wakeup.set()
+            outbox_wakeup.set()
+
         poller = Poller(
             pool,
             telegram,
             allowed_user_ids=settings.telegram_allowed_user_ids,
             default_timezone=settings.default_timezone,
             clock=utc_now,
-            on_stored=turn_wakeup.set,
+            on_stored=on_stored,
             on_stop=runner.request_stop,
         )
         sender = Sender(pool, telegram, clock=utc_now)

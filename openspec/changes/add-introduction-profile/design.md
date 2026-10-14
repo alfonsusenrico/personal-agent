@@ -104,8 +104,10 @@ Table `introduction`: `person_id` (primary key), `state` (`offered`,
   one. A skipped topic gets no draft.
 - **Summary:** code appends it when the last open topic is answered, after
   any change once all topics are done, or when the model writes
-  `<pa-intro-summary/>`; never on the reply to an Edit press, which only
-  asks what to change. Finishing early (the model's `<pa-intro-summary/>`
+  `<pa-intro-summary/>`, or when `/start` reopens an introduction with nothing
+  left to ask; never on the reply to an Edit press, which only asks what to
+  change. Values are list items: Rich Markdown joins single line breaks into
+  one paragraph (seen live). Finishing early (the model's `<pa-intro-summary/>`
   with topics still open) skips those topics, so Edit afterwards changes an
   answer instead of resuming the questions. The first paid run found this:
   after Edit the model went back to asking about the next topic.
@@ -144,7 +146,14 @@ Actions: `intro_start`, `intro_later`, `intro_save`, `intro_edit`,
 - The pressed message is redrawn with the outcome ("✓ Saved", "Cancelled",
   "Removed") as quick replies are today.
 - `intro_start` and `intro_edit` also open a turn so the model asks the next
-  question; the other actions need no model call.
+  question, and `intro_save` opens one so the model closes the introduction
+  in one sentence under the new names (the live check showed that ending on
+  a silent "✓ Saved" felt like the conversation stopped). The other actions
+  need no model call. A stored press also wakes the sender, so a rename goes
+  out at once.
+- Code adds only its own buttons to the offer message: choice buttons the
+  model wrote there are removed, because in the live check the owner pressed
+  the model's own "Mulai" button, which started nothing.
 - A stale action (its target already confirmed, removed, or replaced) is
   acknowledged with a short notice and changes nothing.
 

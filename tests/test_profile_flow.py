@@ -165,6 +165,7 @@ async def test_the_introduction_counts_only_after_save(
         "Morning! Want to do a quick introduction?",
         "Great. What should I call you?",
         f"Here's what I have.{ALL_TOPICS}",
+        "All set, Sam. I'm Nara now.",
         "Hey Sam.",
     ]
     await _say(agent, 1, "morning!")
@@ -181,7 +182,7 @@ async def test_the_introduction_counts_only_after_save(
 
     summary = agent.server.sent_texts[-1]
     assert summary.startswith("Here's what I have.")
-    assert "**What to call you:** Sam" in summary and "**My name:** Nara" in summary
+    assert "- **What to call you:** Sam\n- **My name:** Nara\n" in summary
     assert "Skipped: Interests" in summary
     assert "Save" in summary and "Edit" in summary
     assert await _active(pool) == []
@@ -191,6 +192,8 @@ async def test_the_introduction_counts_only_after_save(
     await agent.sender.send_pending()
 
     assert agent.server.edits[-1]["rich_message"]["markdown"].endswith("✓ Saved")
+    assert "just saved the introduction" in agent.responses.developer_note()
+    assert agent.server.sent_texts[-1] == "All set, Sam. I'm Nara now."
     assert ("address", "Sam") in await _active(pool)
     assert agent.server.bot_names == ["Nara"]
     assert await _rows(pool, "SELECT state FROM introduction") == [("completed",)]
@@ -223,6 +226,29 @@ async def test_edit_shows_a_new_summary_and_saves_nothing(
 
     assert "**What to call you:** Sammy" in agent.server.sent_texts[-1]
     assert await _active(pool) == []
+
+
+async def test_start_after_saving_shows_the_profile_to_review(
+    agent: Agent[FakeResponses], pool: AsyncConnectionPool
+) -> None:
+    agent.responses.script = [
+        "/start received. What should I call you?",
+        "Here's what I have."
+        + ALL_TOPICS.replace(
+            '<pa-profile field="interests" skip="true"/>',
+            '<pa-profile field="interests">Cycling</pa-profile>',
+        ),
+        "All set, Sam.",
+        "Here's what I know about you; change anything you like.",
+    ]
+    await _say(agent, 1, "/start")
+    await _say(agent, 2, "all the answers")
+    await _press(agent, pool, 3, "Save")
+    await _say(agent, 4, "/start")
+
+    review = agent.server.sent_texts[-1]
+    assert review.startswith("Here's what I know about you")
+    assert "- **What to call you:** Sam" in review and "Save" in review
 
 
 async def test_start_resumes_with_the_answers_so_far(

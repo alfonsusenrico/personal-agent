@@ -18,7 +18,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from personal_agent.conversation.models import EventRow, MessageRow, TurnInput
-from personal_agent.profile.render import context_lines, instructions_section
+from personal_agent.profile.render import SAVE_LABEL, context_lines, instructions_section
 from personal_agent.profile.store import Entry
 
 # A rough, deliberately conservative token estimate for budgeting the window.
@@ -301,7 +301,12 @@ def build_reply_request(
                 tz=turn.person_tz,
                 offline_after=offline_after,
                 profile_lines=context_lines(
-                    turn.profile, offer_due=offer_due(turn), tz=turn.person_tz
+                    turn.profile,
+                    offer_due=offer_due(turn),
+                    tz=turn.person_tz,
+                    just_saved=any(
+                        event.kind == "button" and event.text == SAVE_LABEL for event in turn.events
+                    ),
                 ),
             ),
         }
