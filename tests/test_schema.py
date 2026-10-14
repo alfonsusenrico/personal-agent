@@ -94,3 +94,58 @@ def test_forwarded_trust_requires_an_origin(connection: psycopg.Connection) -> N
             """,
             (person_id, conversation_id, turn_id, NOW, NOW),
         )
+
+
+def test_a_quick_reply_token_is_unique(connection: psycopg.Connection) -> None:
+    person_id, conversation_id, turn_id = _seed(connection)
+    message = connection.execute(
+        """
+        INSERT INTO message (person_id, conversation_id, turn_id, role, text, occurred_at,
+            person_tz, trust, source_event_ids, created_at)
+        VALUES (%s, %s, %s, 'assistant', 'x', %s, 'Asia/Jakarta', 'assistant', '{}', %s)
+        RETURNING id
+        """,
+        (person_id, conversation_id, turn_id, NOW, NOW),
+    ).fetchone()
+    assert message is not None
+    outbox = connection.execute(
+        """
+        INSERT INTO outbox (person_id, turn_id, message_id, channel, external_chat_id,
+            chunk_index, kind, text, status, created_at)
+        VALUES (%s, %s, %s, 'telegram', '1', 0, 'rich', 'x', 'pending', %s) RETURNING id
+        """,
+        (person_id, turn_id, message[0], NOW),
+    ).fetchone()
+    assert outbox is not None
+    insert = (
+        "INSERT INTO reply_button (person_id, turn_id, outbox_id, token, label, position, created_at)"
+        " VALUES (%s, %s, %s, 'b:1', 'A', 0, %s)"
+    )
+    connection.execute(insert, (person_id, turn_id, outbox[0], NOW))
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        connection.execute(insert, (person_id, turn_id, outbox[0], NOW))
+
+
+def test_reactions_carry_no_text_and_messages_must(connection: psycopg.Connection) -> None:
+    person_id, conversation_id, turn_id = _seed(connection)
+    message = connection.execute(
+        """
+        INSERT INTO message (person_id, conversation_id, turn_id, role, text, occurred_at,
+            person_tz, trust, source_event_ids, created_at)
+        VALUES (%s, %s, %s, 'assistant', 'x', %s, 'Asia/Jakarta', 'assistant', '{}', %s)
+        RETURNING id
+        """,
+        (person_id, conversation_id, turn_id, NOW, NOW),
+    ).fetchone()
+    assert message is not None
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        connection.execute(
+            """
+            INSERT INTO outbox (person_id, turn_id, message_id, channel, external_chat_id,
+                chunk_index, kind, text, status, created_at)
+            VALUES (%s, %s, %s, 'telegram', '1', 0, 'rich', NULL, 'pending', %s)
+            """,
+            (person_id, turn_id, message[0], NOW),
+        )

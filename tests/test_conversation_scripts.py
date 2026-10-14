@@ -23,9 +23,11 @@ def test_scripts_exist_and_parse() -> None:
 
 @pytest.mark.parametrize("path", script_paths(), ids=lambda path: path.stem)
 async def test_script_outcome(path: Path, pool: AsyncConnectionPool) -> None:
-    agent = new_agent(pool, FakeResponses(), FakeClock(START))
+    script = load_script(path)
+    responses = FakeResponses()
+    responses.script = list(script.get("fake_replies") or [])
+    agent = new_agent(pool, responses, FakeClock(START))
 
-    run = await run_script(load_script(path), pool, agent)
+    run = await run_script(script, pool, agent, fake=True)
 
     assert run.failures == []
-    assert run.replies, "every script gets at least one reply"

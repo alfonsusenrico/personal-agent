@@ -1,0 +1,14 @@
+name: thanks-reaction
+description: A plain "thanks" may get just a reaction instead of a message (owner review).
+steps:
+  - send: "what's 12 times 12?"
+  - settle: true
+  - wait: 30
+  - send: "thanks, got it"
+fake_replies:
+  - "144."
+  - "<pa-react emoji=\"👍\"/>"
+expect:
+  turns: 2
+expect_fake:
+  sent_methods: [sendRichMessage, setMessageReaction]

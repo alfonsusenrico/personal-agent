@@ -20,6 +20,24 @@
   - `sendMessage` text is 1-4096 characters.
   - `sendChatAction` lasts "5 seconds or less".
   - Flood control returns `parameters.retry_after`.
+  - Rich messages (Bot API 10.1-10.3, 2026): `sendRichMessage` takes Rich
+    Markdown that "is compatible with GitHub Flavored Markdown where possible"
+    (headings, lists, task lists, tables, code, quotes, `<details>`,
+    footnotes, LaTeX, spoilers, `tg://time` stamps, `<tg-button>` rows). Limits:
+    32,768 UTF-8 characters, 500 blocks, 16 nesting levels, 50 media, 20
+    table columns. Media blocks take HTTP(S) URLs only.
+  - `sendRichMessageDraft` and `sendMessageDraft` (private chats) show a
+    "temporary 30-second preview"; an empty draft or `<tg-thinking>` shows a
+    placeholder; `can_stop` adds a Stop button that sends a
+    `stopped_message_generation` update with the `draft_id`.
+  - Callback buttons carry 1-64 bytes of data and arrive as
+    `callback_query`; `answerCallbackQuery` ends the button's spinner;
+    `editMessageText` accepts `rich_message`.
+  - `setMessageReaction` accepts 73 listed emoji; `message_effect_id` works
+    in private chats, but effect IDs are not published for bots.
+  - Votes in non-anonymous polls the bot sent arrive as `poll_answer`.
+- **The gateway finishes a streamed call after the client disconnects** to
+  settle its exact cost (gateway spec `llm-calls`).
 - **Owner decisions for this change** (2026-10-13):
   - replies mirror the language of the latest message;
   - messages from an offline period are answered, mentioning the delay;
@@ -29,6 +47,15 @@
   - the allowlist is the owner's existing Telegram account;
   - the gateway request is the full USD 5 cap;
   - feedback capture comes later.
+- **Owner decisions on output** (2026-10-13, after the plain-text version was
+  verified): the agent knows the platform it writes to and uses Telegram's
+  complete output features from the start; each later platform gets complete
+  support when it is added. Stream a live draft with a Stop button; Stop
+  discards the reply; a message during a visible draft still makes it
+  rethink once; quick-reply, link, and copy buttons, and a pressed quick reply
+  shows the choice and removes the buttons; reactions, message effects,
+  native polls, and images by URL, with URLs limited to ones already in the
+  chat.
 
 ## Goals / Non-Goals
 
@@ -46,8 +73,11 @@
 
 ### 1. Talk to the Bot API directly
 
-A small client over `httpx2` implements `getUpdates`, `sendMessage`, and
-`sendChatAction`, following the pattern of the gateway notifier.
+A small client over `httpx2` implements the methods used (`getUpdates`,
+`sendRichMessage`, `sendRichMessageDraft`, `sendMessage`, `editMessageText`,
+`answerCallbackQuery`, `setMessageReaction`, `sendPoll`, `getMe`), following
+the pattern of the gateway notifier. `allowed_updates` adds `callback_query`,
+`poll_answer`, and `stopped_message_generation`.
 
 *Rejected:*
 - **aiogram and python-telegram-bot:** both bring their own dispatch loop
@@ -129,6 +159,15 @@ On restart:
   frozen when it starts (the events it covers and its start time, which is
   the "current time" in the context note), so a restart rebuilds an identical
   request and resubmits the same ID, which the gateway replays for free.
+  If the old process stopped while the gateway was still running the call,
+  the gateway answers `call_in_progress` until that run ends. The agent then
+  resubmits the same ID every 5 seconds for up to 300 seconds, which covers
+  the gateway's 180-second call deadline and 240-second lease, and takes the
+  replay. A call row recorded as `stopped` by the shutdown is updated with
+  the replayed outcome. The client's own retries for `call_in_progress` (4
+  attempts, a few seconds) are too short for a reply still being written;
+  the live restart check found this, when the restarted worker sent the
+  apology while the gateway was still writing.
 - **Gateway fields:** `operation` is `reply`, so the gateway ledger shows cost
   by purpose. `prompt_cache_key` is `person-{person_id}`.
 - **Failures:**
@@ -151,10 +190,11 @@ On restart:
 
 The stable part comes first, to maximise prompt caching:
 
-1. **`instructions`:** the persona, from a versioned file in the package.
-   It asks the model to be brief, warm, and honest; to use at most one
-   follow-up question; to avoid flattery; to reply in the language of the
-   owner's latest message; and to never claim to be human.
+1. **`instructions`:** the persona, from a versioned file in the package,
+   followed by the Telegram guide (decision 12). The persona asks the model
+   to be brief, warm, and honest; to use at most one follow-up question; to
+   avoid flattery; to reply in the language of the owner's latest message;
+   and to never claim to be human.
 2. **Recent window:** the newest messages that fit
    `RECENT_WINDOW_TOKENS` (default 6,000, estimated at 4 characters per
    token), up to 40 messages. Each message is in its own role. The owner's
@@ -197,7 +237,7 @@ Service messages, such as a pin, are logged but start no turn.
   owner edited an earlier message, with both texts. Rapid repeated edits are
   merged by the debounce.
 
-### 8. Data model (migrations 0001-0002)
+### 8. Data model (migrations 0001-0003)
 
 Every table carries `person_id`. All times are `timestamptz` in UTC, and each
 event also stores the person's IANA timezone at that moment.
@@ -220,6 +260,11 @@ event also stores the person's IANA timezone at that moment.
   and the Telegram message ID.
 - `model_call`: call ID, purpose, generation, attempt, status, tokens,
   cached tokens, cost, and latency. No content.
+- `0003` adds Telegram output: event kinds `button`, `poll_answer`, and
+  `stop` (a message ID is optional for them); turn status `stopped` and the
+  current `draft_id`; model-call status `stopped`; outbox `kind` and JSON
+  `payload` (text optional for reactions); `reply_button` (token, label,
+  pressed time) and `reply_poll` (Telegram poll ID, question, options).
 
 Retention is permanent. Deletion arrives with the `/memory` commands in a
 later step.
@@ -231,9 +276,10 @@ turn runner, and sender. Postgres is the queue.
 
 - A session-level advisory lock ensures that only one worker per database
   polls the bot. Telegram also refuses concurrent `getUpdates`.
-- A typing action is sent every 4 seconds while a turn is generating.
-- Replies are split at paragraph, then sentence boundaries, under 4,000
-  characters. Telegram `parse_mode` stays plain text in this change.
+- A live draft follows the typing action once text is written (decision 15).
+- Rich replies are split only above Telegram's rich limits (rare at 2,000
+  output tokens); the plain-text fallback splits at paragraph, then sentence
+  boundaries, under 4,000 characters.
 - `retry_after` from flood control is honoured.
 
 **Compose:** a `worker` service. It reaches the local gateway at
@@ -261,6 +307,127 @@ delays, edits, and non-text inputs, and the expected structural outcomes
   owner-authorised). It writes transcripts to the git-ignored
   `research/eval/` for owner review, with the cost of each run.
 
+### 12. The model writes Telegram's own format
+
+The instructions are the persona plus a Telegram guide
+(`conversation/channels/telegram.md`), both stable and so cached. The guide
+teaches when to format (casual chat stays short plain text; structure only
+for structured content), the Rich Markdown syntax, buttons, the output
+directives below, and the limits. The model's output is Telegram Rich
+Markdown, sent with `sendRichMessage`.
+
+*Rejected:*
+- **Regular messages with MarkdownV2 or HTML:** 4,096 characters, strict
+  escaping (one stray character rejects the message), no headings or tables.
+- **A neutral format converted per platform:** an extra layer that loses the
+  platform's own features; the owner wants each platform complete.
+
+### 13. Output directives
+
+Telegram actions that are not message text are written as the agent's own
+tags (prefix `pa-`, so they never clash with Telegram's `tg-` tags). The
+sender removes them from the text and performs them:
+
+- `<pa-react emoji="👍"/>`: `setMessageReaction` on the owner's latest
+  message in the turn, only with one of Telegram's 73 allowed emoji. A reply
+  that is only a reaction sends no message.
+- `<pa-effect name="celebrate"/>`: a message effect from a fixed map
+  (celebrate, love, like, fire, dislike, poop). The IDs are the commonly used
+  ones and are verified live; a send rejected for its effect is retried
+  without it. An effect plays on a message the assistant writes; liking or
+  disliking the owner's message is a reaction (owner decision, 2026-10-14).
+  A reply that is only an effect becomes a reaction with the effect's emoji
+  (🎉 ❤ 👍 🔥 👎 💩) on the owner's message instead of failing as empty.
+  The live phone check found the model answering "dislike this message"
+  with the effect tag alone (the apology was sent), and with a 👎 message
+  carrying the effect when told to write a message with every effect.
+- `<pa-poll question="..." multiple="false"><option>...</option></pa-poll>`:
+  a non-anonymous `sendPoll` after the message (1-12 options, question up to
+  300 characters), so the owner's vote comes back.
+
+Invalid directives are dropped and counted in the logs. Drafts never show
+directives.
+
+### 14. Buttons
+
+- The model writes `<tg-button-row>` rows with `callback_data` (quick
+  replies), `url`, and `copy_text` buttons. Other button types (Mini Apps,
+  login, inline switches) are removed.
+- Each quick reply's data is replaced by a random token (`b:` and 16 hex
+  characters) stored with its label in `reply_button`, so a press maps to a
+  known button even after a database reset, and the model never chooses
+  callback data.
+- A press arrives as `callback_query`: allowlist check, `answerCallbackQuery`
+  to end the spinner, then an inbound event of kind `button` whose text is
+  the label. It joins turns like a typed message. The message is then edited
+  to replace its quick-reply rows with "✓ label" (owner decision). A token
+  already used, or unknown, gets a short "no longer available" notice and
+  nothing else.
+
+### 15. Streaming drafts
+
+- Each generation streams through the gateway (`responses.stream`). Until
+  the model writes visible text, the typing chat action is shown (refreshed
+  every 4 seconds, as it lasts 5); then the text so far is sent with
+  `sendRichMessageDraft` and `can_stop` at most once per
+  `DRAFT_INTERVAL_SECONDS` (default 1), only when it changed, with
+  unfinished tags and directives hidden. Drafts are refreshed at least every
+  20 seconds, because they last 30.
+- Why no `<tg-thinking>` placeholder draft (owner decision after the live
+  check, 2026-10-13): the Bot API cannot withdraw a draft, only a sent
+  message replaces it. A reply that is only a reaction sends no message, so
+  the placeholder stayed visible with its Stop button for up to 30 seconds,
+  and the owner pressed Stop on it. Stop is therefore available only once
+  text streams; pressing it earlier would not save cost anyway (trade-off
+  below). Every draft uses the rich method, because a plain
+  `sendMessageDraft` was not cleared by the final `sendRichMessage` (live
+  check).
+- Each generation gets a random `draft_id`, stored on the turn, so a Stop
+  press maps to its turn.
+- The final message still goes through the outbox (exactly once); Telegram
+  removes the draft when the bot sends. A regeneration starts a new draft,
+  replacing the visible one (owner decision). A replayed call after a restart
+  arrives whole, without visible streaming.
+- Draft errors are cosmetic: logged by code and ignored.
+
+*Rejected:* typing and the full message (the owner chose streaming);
+sending a message and editing it repeatedly (leaves "edited" marks and costs
+more requests).
+
+### 16. Stop
+
+`stopped_message_generation` for the draft of a generating turn cancels its
+stream. The turn becomes `stopped`, its model call is recorded as `stopped`,
+and nothing is sent (owner decision). The owner's message is kept, followed
+by an assistant record "[stopped by the owner before the reply was
+finished]", so the next reply knows. The gateway still completes and charges
+the call. A Stop for an old or unknown draft is ignored.
+
+The owner's Telegram Desktop client sent its Stop press as a typed `/stop`
+command (a `bot_command` entity), not as `stopped_message_generation` (live
+check, 2026-10-13). So an owner message that is exactly `/stop` (optionally
+`/stop@botname`) is stored as a `stop` event with no draft ID, which stops
+the conversation's generating turn whatever its draft; it never joins a turn
+or reaches the model. With nothing generating it is recorded and ignored.
+
+### 17. Images by URL
+
+A media block is kept only if its exact URL appeared in an owner message in
+the turn or the recent window (later also in tool results); other media
+blocks are removed before sending (owner decision). Media URLs are never
+fetched by the agent; Telegram fetches them.
+
+### 18. Sending and fallback
+
+- Outbox rows have a kind (`rich`, `plain`, `reaction`, `poll`) and a JSON
+  payload.
+- When Telegram rejects a rich message with 400, the sender sends the same
+  reply once as plain text with the markup removed and records
+  `fallback_plain`. Whether every client renders rich messages is checked on
+  the owner's devices during the live check.
+- The stored assistant message is the reply as sent, directives included, so
+  the model sees what it did.
+
 ## Risks / Trade-offs
 
 - **[Risk] Telegram has no send idempotency, so a crash can duplicate one
@@ -272,6 +439,13 @@ delays, edits, and non-text inputs, and the expected structural outcomes
 - **[Risk] Language mirroring relies on the model.** → The live evaluation
   scripts include English, Indonesian, and mixed messages. The profile step
   makes the preference explicit.
+- **[Risk] Rich messages are new (June 2026) and client support is not
+  documented.** → Plain-text fallback on rejection; the live check covers
+  the owner's phone and desktop.
+- **[Risk] Effect IDs are not published for bots.** → A fixed, live-verified
+  map; a rejected effect is retried without it.
+- **[Trade-off] Stop does not save cost,** because the gateway settles the
+  full call. → Documented; cancellation would be a gateway change.
 - **[Risk] Character-based token estimates are rough.** → The window budget
   leaves margin, and real token counts from `model_call` tune the default.
 - **[Trade-off] Strangers' messages are not stored,** so abuse cannot be

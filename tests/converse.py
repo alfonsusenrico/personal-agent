@@ -56,14 +56,18 @@ async def _run_one(
         )
         await pool.open(wait=True)
         try:
+            script = load_script(path)
+            on_stub = args.profile == "reply_stub"
             agent = new_agent(
                 pool,
                 gateway.responses,
                 FakeClock(datetime.now(UTC).replace(microsecond=0)),
                 profile=args.profile,
                 reasoning_effort=args.effort,
+                # The stub answers with the script's replies, so the reply side is checked too.
+                stub_replies=list(script.get("fake_replies") or []) if on_stub else None,
             )
-            return await run_script(load_script(path), pool, agent)
+            return await run_script(script, pool, agent, fake=on_stub)
         finally:
             await pool.close()
     finally:

@@ -1,0 +1,10 @@
+name: invented-image
+description: Asked for a picture it has no URL for, the reply does not invent one (owner review).
+steps:
+  - send: "show me a picture of a golden retriever puppy"
+fake_replies:
+  - "I can't fetch pictures yet. ![](https://invented.example/puppy.jpg)"
+expect:
+  turns: 1
+expect_fake:
+  sent_excludes: ["invented.example"]

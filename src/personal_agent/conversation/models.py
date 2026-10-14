@@ -12,14 +12,14 @@ Role = Literal["user", "assistant"]
 @dataclass(frozen=True, slots=True)
 class EventRow:
     id: int
-    kind: Literal["message", "edit", "unsupported"]
+    kind: Literal["message", "edit", "unsupported", "button", "poll_answer", "stop"]
     modality: str
     occurred_at: datetime
     trust: Literal["owner_direct", "owner_forwarded"]
     forward_origin: dict[str, Any] | None
     text: str | None
     external_chat_id: str
-    external_message_id: str
+    external_message_id: str | None
     edit_of: int | None
     # For an edit: whether the edited message belongs to the same turn, and the
     # text it had just before this edit.
@@ -48,6 +48,9 @@ class GenerationPlan:
     generation: int
     started_at: datetime
     through_event_id: int
+    # The Telegram draft of this generation, so a Stop press finds its turn.
+    draft_id: int = 1
+    stop_requested: bool = False
 
 
 @dataclass(frozen=True, slots=True)

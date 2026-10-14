@@ -43,6 +43,8 @@ class WorkerSettings(Settings):
     turn_debounce_seconds: float = Field(default=2.0, ge=0, le=30)
     recent_window_tokens: int = Field(default=6_000, ge=500, le=100_000)
     offline_notice_after_seconds: int = Field(default=300, ge=30)
+    # Least time between streamed draft updates on Telegram.
+    draft_interval_seconds: float = Field(default=1.0, ge=0.3, le=10)
 
     @field_validator("telegram_allowed_user_ids", mode="before")
     @classmethod

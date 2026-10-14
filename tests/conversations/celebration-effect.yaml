@@ -1,0 +1,11 @@
+name: celebration-effect
+description: Big good news may get a message effect (owner review).
+steps:
+  - send: "I just got the job offer!!"
+fake_replies:
+  - "<pa-effect name=\"celebrate\"/>Congratulations! That's huge."
+expect:
+  turns: 1
+expect_fake:
+  sent_methods: [sendRichMessage]
+  sent_contains: ["[with an effect]"]

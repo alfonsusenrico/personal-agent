@@ -77,6 +77,15 @@ docker compose up --build migrate
 
 How it behaves:
 
+- While it thinks you see "typing…", then a live draft of the reply as it is
+  written, with a Stop button (Telegram Desktop sends Stop as /stop, which
+  works the same). Stop discards the reply (the model call is still paid
+  for).
+- Replies are Telegram rich messages: plain text for chat, and tables,
+  lists, code, formulas, or collapsible sections when they help. It can add
+  quick-reply buttons (your press counts as your answer), link and copy
+  buttons, react to your message with an emoji, add a message effect, send a
+  poll (your vote comes back to it), and show images whose URLs you shared.
 - Messages sent within 2 seconds of each other are answered as one reply. A
   message sent while it is still thinking makes it reconsider, at most once.
 - It replies in the language of your latest message and knows the current

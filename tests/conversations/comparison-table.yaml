@@ -1,0 +1,11 @@
+name: comparison-table
+description: A comparison request may get a rich table (owner review of formatting choice).
+steps:
+  - send: "compare renting vs buying a car for me: monthly cost, flexibility, maintenance, long-term value. keep it short"
+fake_replies:
+  - "| | Rent | Buy |\n|---|---|---|\n| Monthly | Higher | Lower after payoff |\n| Flexibility | High | Low |"
+expect:
+  turns: 1
+expect_fake:
+  sent_methods: [sendRichMessage]
+  sent_contains: ["| Monthly |"]

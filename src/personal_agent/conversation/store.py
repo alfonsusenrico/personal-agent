@@ -6,7 +6,8 @@ leaves either all of a step or none of it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal, LiteralString
 
@@ -16,6 +17,7 @@ from psycopg.types.json import Jsonb
 
 from personal_agent.conversation.context import render_turn
 from personal_agent.conversation.models import EventRow, GenerationPlan, MessageRow, TurnInput
+from personal_agent.telegram.rich import PollSpec, QuickReply
 from personal_agent.telegram.updates import Envelope
 
 CHANNEL = "telegram"
@@ -24,10 +26,25 @@ MAX_GENERATIONS = 2
 
 
 @dataclass(frozen=True, slots=True)
+class ButtonPress:
+    """What the poller does after a button press is stored."""
+
+    callback_query_id: str
+    accepted: bool
+    label: str | None = None
+    chat_id: str | None = None
+    message_id: str | None = None
+    # The sent rich message, to redraw it with the chosen option.
+    markdown: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class IngestResult:
     event_id: int | None
     turn_id: int | None
     duplicate: bool
+    button: ButtonPress | None = None
+    stopped_turn_id: int | None = None
 
 
 async def _one(
@@ -147,8 +164,16 @@ async def ingest(
             (CHANNEL, str(envelope.chat_id), str(envelope.message_id)),
         )
         edit_of = original["id"] if original else None
+    text, answerable = envelope.text, envelope.answerable
+    button_row: dict[str, Any] | None = None
+    if envelope.kind == "button":
+        button_row = await _unused_button(connection, person_id, envelope.button_token or "")
+        text, answerable = (button_row["label"], True) if button_row else (None, False)
+    elif envelope.kind == "poll_answer":
+        text = await _vote_text(connection, person_id, envelope)
+        answerable = text is not None
     turn_id = None
-    if envelope.answerable:
+    if answerable:
         turn_id = await _turn_for_new_event(connection, person_id, conversation_id, now)
     row = await _required(
         connection,
@@ -168,7 +193,7 @@ async def ingest(
             CHANNEL,
             str(envelope.update_id),
             str(envelope.chat_id),
-            str(envelope.message_id),
+            str(envelope.message_id) if envelope.message_id is not None else None,
             envelope.kind,
             envelope.modality,
             envelope.occurred_at,
@@ -178,11 +203,94 @@ async def ingest(
             Jsonb(envelope.forward_origin) if envelope.forward_origin else None,
             str(envelope.reply_to_message_id) if envelope.reply_to_message_id else None,
             edit_of,
-            envelope.text,
+            text,
             Jsonb(envelope.raw),
         ),
     )
+    if envelope.kind == "button":
+        return IngestResult(
+            event_id=row["id"],
+            turn_id=turn_id,
+            duplicate=False,
+            button=await _record_press(connection, envelope, button_row, row["id"], now),
+        )
+    if envelope.kind == "stop":
+        stopped = await _one(
+            connection,
+            """
+            UPDATE turn SET stop_requested_at = %s
+            WHERE conversation_id = %s AND status = 'generating'
+              AND (%s::bigint IS NULL OR draft_id = %s)
+            RETURNING id
+            """,
+            (now, conversation_id, envelope.draft_id, envelope.draft_id),
+        )
+        return IngestResult(
+            event_id=row["id"],
+            turn_id=None,
+            duplicate=False,
+            stopped_turn_id=stopped["id"] if stopped else None,
+        )
     return IngestResult(event_id=row["id"], turn_id=turn_id, duplicate=False)
+
+
+async def _unused_button(
+    connection: AsyncConnection, person_id: int, token: str
+) -> dict[str, Any] | None:
+    """The pressed quick reply, if it exists and no quick reply of its message was used."""
+    return await _one(
+        connection,
+        """
+        SELECT b.id, b.label, b.outbox_id, o.text AS markdown
+        FROM reply_button b JOIN outbox o ON o.id = b.outbox_id
+        WHERE b.token = %s AND b.person_id = %s
+          AND NOT EXISTS (
+              SELECT 1 FROM reply_button used
+              WHERE used.outbox_id = b.outbox_id AND used.pressed_at IS NOT NULL
+          )
+        FOR UPDATE OF b
+        """,
+        (token, person_id),
+    )
+
+
+async def _record_press(
+    connection: AsyncConnection,
+    envelope: Envelope,
+    button_row: dict[str, Any] | None,
+    event_id: int,
+    now: datetime,
+) -> ButtonPress:
+    if button_row is None:
+        return ButtonPress(envelope.callback_query_id or "", accepted=False)
+    await connection.execute(
+        "UPDATE reply_button SET pressed_at = %s, pressed_event_id = %s WHERE id = %s",
+        (now, event_id, button_row["id"]),
+    )
+    return ButtonPress(
+        envelope.callback_query_id or "",
+        accepted=True,
+        label=button_row["label"],
+        chat_id=str(envelope.chat_id),
+        message_id=str(envelope.message_id),
+        markdown=button_row["markdown"],
+    )
+
+
+async def _vote_text(connection: AsyncConnection, person_id: int, envelope: Envelope) -> str | None:
+    """The vote as the owner's answer, or None for an unknown poll or a retracted vote."""
+    poll = await _one(
+        connection,
+        "SELECT question, options FROM reply_poll WHERE external_poll_id = %s AND person_id = %s",
+        (envelope.poll_id, person_id),
+    )
+    if poll is None or not envelope.poll_option_ids:
+        return None
+    options: list[str] = poll["options"]
+    chosen = [options[index] for index in envelope.poll_option_ids if 0 <= index < len(options)]
+    if not chosen:
+        return None
+    return f"{poll['question']} → {', '.join(chosen)}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,7 +337,7 @@ async def begin_generation(
         connection,
         """
         SELECT id, call_key, person_id, conversation_id, status, generation, generation_started_at,
-               generated_through_event_id
+               generated_through_event_id, draft_id, stop_requested_at
         FROM turn WHERE id = %s FOR UPDATE
         """,
         (turn_id,),
@@ -245,17 +353,19 @@ async def begin_generation(
         if now < ready_at:
             return ready_at
         generation = turn["generation"] + 1
+        # A new draft for each generation, so a regeneration replaces the visible one.
+        draft_id = secrets.randbelow(2**31 - 1) + 1
         await connection.execute(
             """
             UPDATE turn SET status = 'generating', generation = %s, generation_started_at = %s,
-                generated_through_event_id = %s
+                generated_through_event_id = %s, draft_id = %s
             WHERE id = %s
             """,
-            (generation, now, last_event_id, turn_id),
+            (generation, now, last_event_id, draft_id, turn_id),
         )
         started_at, through = now, last_event_id
     else:
-        generation = turn["generation"]
+        generation, draft_id = turn["generation"], turn["draft_id"]
         started_at, through = turn["generation_started_at"], turn["generated_through_event_id"]
     return GenerationPlan(
         turn_id=turn_id,
@@ -265,6 +375,8 @@ async def begin_generation(
         generation=generation,
         started_at=started_at,
         through_event_id=through,
+        draft_id=draft_id,
+        stop_requested=turn["stop_requested_at"] is not None,
     )
 
 
@@ -356,15 +468,18 @@ async def mark_superseded_if_stale(
     return True
 
 
-async def lock_open_turn(connection: AsyncConnection, plan: GenerationPlan) -> bool:
+async def lock_open_turn(
+    connection: AsyncConnection, plan: GenerationPlan
+) -> Literal["open", "stop", "closed"]:
+    """Lock the turn for its commit: still open, open with a Stop pending, or closed."""
     row = await _one(
         connection,
-        "SELECT status, generation FROM turn WHERE id = %s FOR UPDATE",
+        "SELECT status, generation, stop_requested_at FROM turn WHERE id = %s FOR UPDATE",
         (plan.turn_id,),
     )
-    return (
-        row is not None and row["status"] == "generating" and row["generation"] == plan.generation
-    )
+    if row is None or row["status"] != "generating" or row["generation"] != plan.generation:
+        return "closed"
+    return "stop" if row["stop_requested_at"] is not None else "open"
 
 
 async def _reply_reference(
@@ -383,12 +498,35 @@ async def _reply_reference(
     return None
 
 
-async def commit_answer(
+@dataclass(frozen=True, slots=True)
+class OutgoingItem:
+    """One thing to send, in order: a rich or plain message, a reaction, or a poll."""
+
+    kind: Literal["rich", "plain", "reaction", "poll"]
+    text: str | None = None
+    payload: dict[str, Any] = field(default_factory=dict)
+    quick_replies: list[QuickReply] = field(default_factory=list)
+    poll: PollSpec | None = None
+
+
+TurnOutcome = Literal["answered", "failed", "stopped"]
+
+
+def _reaction_target(events: list[EventRow]) -> str | None:
+    """The owner's latest message in the turn; button presses and votes have none."""
+    for event in reversed(events):
+        if event.kind in ("message", "edit", "unsupported") and event.external_message_id:
+            return event.external_message_id
+    return None
+
+
+async def commit_turn(
     connection: AsyncConnection,
     plan: GenerationPlan,
     *,
-    reply_chunks: list[str],
-    reply_text: str,
+    outcome: TurnOutcome,
+    assistant_text: str,
+    items: list[OutgoingItem],
     model_call_id: int | None,
     failure_code: str | None,
     person_tz: str,
@@ -431,7 +569,7 @@ async def commit_answer(
             plan.person_id,
             plan.conversation_id,
             plan.turn_id,
-            reply_text,
+            assistant_text,
             now,
             person_tz,
             rendered.source_event_ids,
@@ -440,13 +578,26 @@ async def commit_answer(
         ),
     )
     reply_to = await _reply_reference(connection, plan, events)
-    for index, chunk in enumerate(reply_chunks):
-        await connection.execute(
+    reaction_target = _reaction_target(events)
+    written = 0
+    for item in items:
+        payload = dict(item.payload)
+        kind, text = item.kind, item.text
+        if kind == "reaction":
+            if reaction_target is not None:
+                payload["target_message_id"] = reaction_target
+            else:
+                # Nothing typed to react to (only presses or votes): send the emoji itself.
+                kind, text, payload = "rich", payload["emoji"], {}
+        attach_reply = kind in ("rich", "plain") and reply_to is not None
+        outbox = await _required(
+            connection,
             """
             INSERT INTO outbox (
-                person_id, turn_id, message_id, channel, external_chat_id, chunk_index, text,
-                reply_to_external_message_id, status, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
+                person_id, turn_id, message_id, channel, external_chat_id, chunk_index, kind,
+                text, payload, reply_to_external_message_id, status, created_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
+            RETURNING id
             """,
             (
                 plan.person_id,
@@ -454,14 +605,53 @@ async def commit_answer(
                 assistant["id"],
                 CHANNEL,
                 chat_id,
-                index,
-                chunk,
-                reply_to if index == 0 else None,
+                written,
+                kind,
+                text,
+                Jsonb(payload),
+                reply_to if attach_reply else None,
                 now,
             ),
         )
+        if attach_reply:
+            reply_to = None
+        for reply in item.quick_replies:
+            await connection.execute(
+                """
+                INSERT INTO reply_button (
+                    person_id, turn_id, outbox_id, token, label, position, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    plan.person_id,
+                    plan.turn_id,
+                    outbox["id"],
+                    reply.token,
+                    reply.label,
+                    reply.position,
+                    now,
+                ),
+            )
+        if item.poll is not None:
+            await connection.execute(
+                """
+                INSERT INTO reply_poll (
+                    person_id, turn_id, outbox_id, question, options, allows_multiple, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    plan.person_id,
+                    plan.turn_id,
+                    outbox["id"],
+                    item.poll.question,
+                    Jsonb(item.poll.options),
+                    item.poll.multiple,
+                    now,
+                ),
+            )
+        written += 1
     await connection.execute(
         "UPDATE turn SET status = %s, failure_code = %s, closed_at = %s WHERE id = %s",
-        ("failed" if failure_code else "answered", failure_code, now, plan.turn_id),
+        (outcome, failure_code, now, plan.turn_id),
     )
-    return len(reply_chunks)
+    return written

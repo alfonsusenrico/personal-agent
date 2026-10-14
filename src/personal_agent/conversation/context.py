@@ -1,7 +1,8 @@
-"""Build the reply call: persona, recent window, per-turn context note, and the turn.
+"""Build the reply call: persona and platform guide, recent window, per-turn context
+note, and the turn.
 
-The stable part comes first so the provider can cache it: the persona instructions,
-then earlier messages (which only grow at the end). The current date and time live
+The stable part comes first so the provider can cache it: the instructions, then
+earlier messages (which only grow at the end). The current date and time live
 in the per-turn context note, never in the instructions.
 """
 
@@ -37,12 +38,26 @@ _MODALITY_NAMES = {
     "story": "story",
     "paid_media": "paid media",
 }
+# Answers given through Telegram controls rather than typed; they are readable.
+_ANSWER_MODALITIES = frozenset({"text", "button", "poll_answer"})
+_ANSWER_MARKERS = {"button": "[pressed]", "poll_answer": "[poll vote]"}
 _FORWARD_TAG = re.compile(r"</?\s*forwarded\b[^>]*>", re.IGNORECASE)
+_URL = re.compile(r"https?://[^\s<>\"')\]]+")
+
+
+def _package_text(name: str) -> str:
+    return resources.files("personal_agent.conversation").joinpath(name).read_text("utf-8")
 
 
 @cache
-def persona_instructions() -> str:
-    return resources.files("personal_agent.conversation").joinpath("persona.md").read_text("utf-8")
+def reply_instructions() -> str:
+    """The persona followed by the platform guide: stable, so the provider caches it."""
+    return f"{_package_text('persona.md').rstrip()}\n\n{_package_text('channels/telegram.md')}"
+
+
+def shared_urls(texts: list[str]) -> set[str]:
+    """HTTP(S) URLs that appear in the owner's own messages."""
+    return {match.rstrip(".,;:!?") for text in texts for match in _URL.findall(text)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +71,8 @@ class RenderedTurn:
     unreadable: list[str] = field(default_factory=list)
     edits_earlier_message: bool = False
     has_forwarded: bool = False
+    # False when the owner only pressed buttons or voted: nothing to react to.
+    has_typed_message: bool = True
 
 
 @dataclass(slots=True)
@@ -107,7 +124,7 @@ def render_turn(events: list[EventRow]) -> RenderedTurn:
         {
             _MODALITY_NAMES.get(item.modality, item.modality)
             for item in items.values()
-            if item.modality != "text" and not item.is_earlier_edit
+            if item.modality not in _ANSWER_MODALITIES and not item.is_earlier_edit
         }
     )
     has_forwarded = any(item.forwarded_from is not None for item in items.values())
@@ -119,6 +136,7 @@ def render_turn(events: list[EventRow]) -> RenderedTurn:
         unreadable=unreadable,
         edits_earlier_message=any(item.is_earlier_edit for item in items.values()),
         has_forwarded=has_forwarded,
+        has_typed_message=any(item.modality not in _ANSWER_MARKERS for item in items.values()),
     )
 
 
@@ -127,6 +145,8 @@ def _render_item(item: _Item) -> str:
     if item.is_earlier_edit:
         before = (item.edit_before or "").strip() or "[not available]"
         return f"[edited an earlier message]\nBefore: {before}\nAfter: {text}"
+    if item.modality in _ANSWER_MARKERS:
+        return f"{_ANSWER_MARKERS[item.modality]} {text}"
     if item.modality != "text":
         marker = f"[{_MODALITY_NAMES.get(item.modality, item.modality)}]"
         text = f"{marker} {text}" if text else marker
@@ -182,7 +202,7 @@ def context_note(
     offset = local.strftime("%z")
     lines = [
         f"Current time for the owner: {local.strftime('%A, %d %B %Y, %H:%M')} "
-        f"({tz}, UTC{offset[:3]}:{offset[3:]})."
+        f"({tz}, UTC{offset[:3]}:{offset[3:]}). Unix time: {int(now.timestamp())}."
     ]
     waited = now - rendered.first_occurred_at
     if waited > offline_after:
@@ -199,6 +219,11 @@ def context_note(
         lines.append(
             "The owner edited a message you already answered (shown as Before and After). "
             "Respond to the change."
+        )
+    if not rendered.has_typed_message:
+        lines.append(
+            "The owner answered with a button or a poll vote. Reply in words; a reaction "
+            "needs a typed message."
         )
     if rendered.has_forwarded:
         lines.append(
@@ -257,7 +282,7 @@ def build_reply_request(
     stamp = local_stamp(rendered.first_occurred_at, turn.person_tz)
     items.append({"role": "user", "content": f"[{stamp}]\n{rendered.text}"})
     return ReplyRequest(
-        instructions=persona_instructions(),
+        instructions=reply_instructions(),
         input=items,
         prompt_cache_key=f"person-{turn.plan.person_id}",
     )

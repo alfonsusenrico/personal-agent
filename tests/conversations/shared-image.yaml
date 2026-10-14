@@ -1,0 +1,11 @@
+name: shared-image
+description: A URL the owner shared may be shown again; invented ones never are.
+steps:
+  - send: "can you show this picture again? https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg"
+fake_replies:
+  - "Here it is:\n![](https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg)\n![](https://invented.example/cat.jpg)"
+expect:
+  turns: 1
+expect_fake:
+  sent_contains: ["Cat03.jpg"]
+  sent_excludes: ["invented.example"]

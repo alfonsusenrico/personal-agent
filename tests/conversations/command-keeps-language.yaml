@@ -1,0 +1,12 @@
+name: command-keeps-language
+description: A slash command has no language, so the reply stays in English like the chat before it (owner review).
+steps:
+  - send: "give me two quick dinner ideas"
+  - settle: true
+  - wait: 60
+  - send: "/help"
+expect:
+  turns: 2
+fake_replies:
+  - "Pasta with garlic and olive oil, or fried rice with an egg."
+  - "I can answer questions, explain things, and help you plan."

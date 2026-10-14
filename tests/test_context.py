@@ -5,8 +5,8 @@ from datetime import timedelta
 from personal_agent.conversation.context import (
     build_reply_request,
     describe_wait,
-    persona_instructions,
     render_turn,
+    reply_instructions,
     select_window,
 )
 from personal_agent.conversation.models import EventRow, GenerationPlan, MessageRow, TurnInput
@@ -56,7 +56,7 @@ def test_layout_puts_stable_parts_first_and_time_only_in_the_note() -> None:
         offline_after=timedelta(minutes=5),
     )
 
-    assert request.instructions == persona_instructions()
+    assert request.instructions == reply_instructions()
     assert [item["role"] for item in request.input] == ["user", "assistant", "developer", "user"]
     assert request.input[0]["content"] == "[Tue 13 Oct 2026 13:05]\nearlier question"
     assert request.input[1]["content"] == "earlier answer"
@@ -115,3 +115,32 @@ def test_wait_descriptions() -> None:
     assert describe_wait(timedelta(hours=8, minutes=30)) == "8 hours 30 minutes"
     assert describe_wait(timedelta(days=2, hours=1, minutes=5)) == "2 days 1 hour"
     assert describe_wait(timedelta(seconds=20)) == "a few seconds"
+
+
+def test_instructions_are_the_persona_then_the_telegram_guide() -> None:
+    instructions = reply_instructions()
+
+    assert instructions.startswith("You are the owner's personal assistant")
+    assert "You are writing in Telegram." in instructions
+    assert instructions.index("Telegram Rich Markdown") > instructions.index("How to talk:")
+    assert "Plain text only" not in instructions
+
+
+def test_button_presses_and_votes_are_answers_not_unreadable_media() -> None:
+    rendered = render_turn(
+        [
+            _event(1, "Sushi", kind="button", modality="button"),
+            _event(2, "Dinner? → Pizza", kind="poll_answer", modality="poll_answer"),
+        ]
+    )
+
+    assert rendered.text == "[pressed] Sushi\n[poll vote] Dinner? → Pizza"
+    assert rendered.unreadable == []
+
+
+def test_the_note_gives_unix_time_for_local_time_stamps() -> None:
+    request = build_reply_request(
+        _turn([_event(5, "when?")]), window_budget_tokens=6_000, offline_after=timedelta(minutes=5)
+    )
+
+    assert f"Unix time: {int(START.timestamp())}." in request.input[-2]["content"]

@@ -12,7 +12,7 @@ from personal_agent.conversation.runner import RunnerConfig, TurnRunner
 from personal_agent.gateway.calls import Responses
 from personal_agent.telegram.poller import Poller
 from personal_agent.telegram.sender import Sender
-from tests.fakes import OWNER_ID, FakeClock, FakeTelegramServer, no_typing
+from tests.fakes import OWNER_ID, FakeClock, FakeTelegramServer, RecordingDrafts
 
 TIMEZONE = "Asia/Jakarta"
 
@@ -33,15 +33,8 @@ class Agent[R: Responses]:
         self.responses = responses
         self.clock = clock
         self.sleeps: list[float] = []
+        self.drafts = RecordingDrafts()
         api = server.api()
-        self.poller = Poller(
-            pool,
-            api,
-            allowed_user_ids=frozenset({OWNER_ID}),
-            default_timezone=TIMEZONE,
-            clock=clock,
-            on_stored=lambda: None,
-        )
         self.runner = TurnRunner(
             pool,
             gateway or responses,
@@ -54,8 +47,18 @@ class Agent[R: Responses]:
                 reasoning_effort=reasoning_effort,
             ),
             clock=clock,
-            typing=no_typing,
+            drafts=self.drafts,
             on_answer=lambda: None,
+            sleep=self._sleep,
+        )
+        self.poller = Poller(
+            pool,
+            api,
+            allowed_user_ids=frozenset({OWNER_ID}),
+            default_timezone=TIMEZONE,
+            clock=clock,
+            on_stored=lambda: None,
+            on_stop=self.runner.request_stop,
         )
         self.sender = Sender(pool, api, clock=clock, sleep=self._sleep)
 

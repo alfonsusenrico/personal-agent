@@ -21,6 +21,18 @@ arriving later SHALL start the next turn.
 - **THEN** the reply is prepared again including the new message, and only
   that reply is sent
 
+#### Scenario: Follow-up while a draft is visible
+
+- **WHEN** the owner sends another message while part of the reply is
+  already visible as a draft
+- **THEN** the draft is replaced and the reply is prepared again with the new
+  message, at most once per turn
+
+#### Scenario: Button press or poll vote
+
+- **WHEN** the owner presses a quick reply or votes in a poll
+- **THEN** it joins or starts a turn exactly like a typed message
+
 #### Scenario: Messages while already answering
 
 - **WHEN** a further message arrives after the regenerated reply has started
@@ -38,6 +50,13 @@ the assistant recording that it was sent.
 - **WHEN** the worker stops after recording the owner's message but before
   replying, and then restarts
 - **THEN** the owner receives exactly one reply to that message
+
+#### Scenario: Restart while the reply is still being written
+
+- **WHEN** the worker stops while the gateway is still running the reply call,
+  and then restarts
+- **THEN** the assistant waits for that call to finish and sends its result
+  as the one reply, without paying for the call again
 
 #### Scenario: Restart after the reply was prepared
 
