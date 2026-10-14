@@ -175,6 +175,7 @@ async def test_the_introduction_counts_only_after_save(
         agent.responses.developer_note()
     )
     assert agent.responses.user_content().endswith("[pressed] Start introduction")
+    assert "ask the owner to confirm Asia/Jakarta" in agent.responses.developer_note()
 
     await _say(agent, 3, "Sam. Call yourself Nara. English. Short. Jakarta. Engineer. 6am. skip")
 

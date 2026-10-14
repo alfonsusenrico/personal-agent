@@ -134,18 +134,19 @@ def context_lines(state: ProfileState, *, offer_due: bool, tz: str) -> list[str]
             topics = ", ".join(f"{LABELS[field]} ({field})" for field in remaining)
             lines.append(f"Topics still open, in order: {topics}.")
             lines.append(
-                "If the owner's latest message answers the first open topic, mark it with "
-                '<pa-profile field="...">value</pa-profile> (or <pa-profile field="..." '
-                'skip="true"/> if they skip it) and ask about the next one; otherwise ask '
-                "about the first open topic. Ask one short question at a time. Acknowledge "
+                "Mark every open topic the owner's latest message answers (one message may "
+                'answer several) with <pa-profile field="...">value</pa-profile>, or '
+                '<pa-profile field="..." skip="true"/> for one they skip, then ask about the '
+                "first topic still open after that. Ask one short question at a time. Acknowledge "
                 "an answer in a few words at most and do not repeat it back: the summary at "
                 "the end shows everything. When the owner wants to finish early, add "
                 "<pa-intro-summary/>; the summary with Save and Edit buttons is added for you."
             )
-            if "timezone" in remaining[:2]:
+            if "timezone" in remaining:
                 lines.append(
-                    f"For the timezone, ask the owner to confirm {tz} (the local time above) "
-                    "or name the place they are in; mark it as an IANA name."
+                    f"For the timezone, do not ask an open question: ask the owner to confirm "
+                    f"{tz} (the local time above, by its usual name, such as WIB for "
+                    "Asia/Jakarta) or say where they are instead; mark it as an IANA name."
                 )
         else:
             lines.append(

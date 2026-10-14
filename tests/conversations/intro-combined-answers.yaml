@@ -1,0 +1,22 @@
+name: intro-combined-answers
+description: One answer covers two topics; the timezone is then confirmed, not asked.
+owner: fresh
+steps:
+  - send: "/start"
+  - settle: true
+  - wait: 20
+  - send: "Sam"
+  - settle: true
+  - wait: 20
+  - send: "Nara"
+  - settle: true
+  - wait: 20
+  - send: "bahasa indonesia santai aja, kadang aku pakai bahasa inggris untuk beberapa topik"
+fake_replies:
+  - "Hai! Mau dipanggil apa?"
+  - "Oke, Sam. Aku mau dipanggil apa?<pa-profile field=\"address\">Sam</pa-profile>"
+  - "Nara, siap. Mau pakai bahasa apa?<pa-profile field=\"assistant_name\">Nara</pa-profile>"
+  - "Siap. Kamu di Jakarta (WIB), kan?<pa-profile field=\"language\">Bahasa Indonesia; kadang Inggris</pa-profile><pa-profile field=\"reply_style\">Santai</pa-profile>"
+expect:
+  introduction_state: active
+  context_contains: ["ask the owner to confirm Asia/Jakarta"]
