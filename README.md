@@ -19,6 +19,7 @@ Early development; everything runs locally for now.
 | Bootstrap: settings, logging, migrations, checks | Done |
 | Telegram conversation through the gateway | Done (local) |
 | Profile: names, language, style, learned in conversation | Done (local) |
+| Daily encrypted backups, flagging bad replies | Done (local) |
 | Reliable long-term memory | Planned |
 | Gmail and Google Calendar sync (read-only) | Planned |
 | Learning your apps' APIs (read-only) | Planned |
@@ -112,6 +113,37 @@ How it behaves:
   which can send that one message twice.
 - Each model call's tokens and cost are in the `model_call` table; no
   message text is ever in a log.
+
+### Backups
+
+While it runs, the `backup` service backs up the database once a day into an
+encrypted [restic](https://restic.net) repository in `BACKUP_DIR` (outside the
+repository), keeping 7 daily and 4 weekly snapshots. It checks every hour, so a
+day the laptop slept is caught up within an hour of waking. Each backup is
+checked after it is written.
+
+- Keep a copy of `RESTIC_PASSWORD` from `.env` in a password manager: without
+  it the backups cannot be read.
+- `./scripts/restore-check` restores the newest backup into a throwaway
+  database and compares every table's row count with the live one.
+- To restore for real (it replaces the current data):
+
+  ```bash
+  docker compose stop worker
+  docker compose exec -T backup sh -c 'restic --no-cache dump --host personal-agent latest /personal_agent.dump | pg_restore --clean --if-exists --no-owner --exit-on-error --dbname "$DATABASE_URL"'
+  docker compose start worker
+  ```
+- The backups sit on the same disk as the database: they protect against
+  mistakes and bad migrations, not against losing the laptop.
+
+### Flagging a bad reply
+
+React 👎 to a reply to flag it (remove the 👎 to take it back), or send
+`/note what was wrong`, as a reply to the message or right after it (`/note`
+alone just flags it). A note gets a 👌; nothing is sent to the model.
+`./scripts/review` lists open flags with your message and the reply, and the
+newest backup's age; `./scripts/review close <id> test|dismissed` closes one.
+A "test" flag becomes a synthetic conversation script.
 
 ### Conversation scripts
 

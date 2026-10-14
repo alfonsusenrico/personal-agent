@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Restore the newest backup into a throwaway PostgreSQL 16 on the Compose network and
+# compare migrations and row counts with the live database. Runs inside the running
+# backup service; the throwaway container keeps its data in memory and is always
+# removed.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [[ -z "$(docker compose ps --status running -q backup)" ]]; then
+  echo "The backup service is not running; start it with: docker compose up -d backup" >&2
+  exit 1
+fi
+name="personal-agent-restore-check-$$"
+network="$(docker inspect --format '{{range $net, $_ := .NetworkSettings.Networks}}{{$net}}{{end}}' "$(docker compose ps -q db)")"
+trap 'docker rm --force "$name" >/dev/null 2>&1 || true' EXIT
+
+docker run --detach --rm --name "$name" --network "$network" \
+  --tmpfs /var/lib/postgresql/data \
+  -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_USER=restore -e POSTGRES_DB=restore \
+  postgres:16-alpine >/dev/null
+ready=""
+for _ in $(seq 1 30); do
+  if docker exec "$name" pg_isready -U restore -d restore >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ -z "$ready" ]]; then
+  echo "The throwaway database did not start" >&2
+  exit 1
+fi
+
+docker compose exec -T -e "RESTORE_DATABASE_URL=postgresql://restore@${name}:5432/restore" \
+  backup personal-agent-restore-check

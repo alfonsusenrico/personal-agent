@@ -29,6 +29,7 @@ services:
   migrate:
     build:
       context: .
+      target: runtime
       args:
         APP_REVISION: ${APP_REVISION:-local}
     image: personal-agent:${APP_REVISION:-local}
@@ -58,6 +59,33 @@ services:
       DRAFT_INTERVAL_SECONDS: ${DRAFT_INTERVAL_SECONDS:-1}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Daily encrypted backups into a restic repository in BACKUP_DIR, a host folder
+  # outside the repository. Also runs scripts/review and scripts/restore-check.
+  backup:
+    build:
+      context: .
+      target: backup
+      args:
+        APP_REVISION: ${APP_REVISION:-local}
+    image: personal-agent-backup:${APP_REVISION:-local}
+    command: ["personal-agent-backup"]
+    # Forwards stop signals: the service process would otherwise run as PID 1.
+    init: true
+    environment:
+      <<: *agent-environment
+      APP_REVISION: ${APP_REVISION:-local}
+      RESTIC_REPOSITORY: /backups
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?Set RESTIC_PASSWORD in .env}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Asia/Jakarta}
+    volumes:
+      - ${BACKUP_DIR:?Set BACKUP_DIR in .env}:/backups
     depends_on:
       db:
         condition: service_healthy

@@ -6,6 +6,7 @@ leaves either all of a step or none of it.
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -18,6 +19,7 @@ from psycopg.types.json import Jsonb
 
 from personal_agent.conversation.context import render_turn
 from personal_agent.conversation.models import EventRow, GenerationPlan, MessageRow, TurnInput
+from personal_agent.feedback import store as feedback_store
 from personal_agent.profile import actions as profile_actions
 from personal_agent.profile import store as profile_store
 from personal_agent.profile.actions import ActionResult
@@ -30,6 +32,7 @@ CHANNEL = "telegram"
 MAX_GENERATIONS = 2
 # /start, optionally with a deep-link payload, asks the open profile topics now.
 _START_COMMAND = re.compile(r"/start(@[A-Za-z0-9_]+)?(\s+\S+)?")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,8 +208,8 @@ async def ingest(
     elif envelope.kind == "message" and text and _START_COMMAND.fullmatch(text.strip()):
         await profile_store.set_asking_now(connection, person_id, now)
     turn_id = None
-    if envelope.kind == "command" and text:
-        turn_id = await _command_turn(connection, person_id, conversation_id, text[1:], now)
+    if envelope.command is not None:
+        turn_id = await _command_turn(connection, person_id, conversation_id, envelope.command, now)
     elif answerable:
         turn_id = await _turn_for_new_event(connection, person_id, conversation_id, now)
     row = await _required(
@@ -241,6 +244,8 @@ async def ingest(
             Jsonb(envelope.raw),
         ),
     )
+    if envelope.feedback is not None:
+        await _record_feedback(connection, person_id, envelope, row["id"], now)
     if envelope.kind == "button":
         return IngestResult(
             event_id=row["id"],
@@ -266,6 +271,92 @@ async def ingest(
             stopped_turn_id=stopped["id"] if stopped else None,
         )
     return IngestResult(event_id=row["id"], turn_id=turn_id, duplicate=False)
+
+
+async def _reply_for_channel_message(
+    connection: AsyncConnection, person_id: int, chat_id: int, external_message_id: int
+) -> int | None:
+    """The assistant message sent as this channel message; any part of a split reply
+    maps to the whole reply."""
+    row = await _one(
+        connection,
+        """
+        SELECT message_id FROM outbox
+        WHERE person_id = %s AND channel = %s AND external_chat_id = %s
+          AND external_message_id = %s AND message_id IS NOT NULL
+        ORDER BY id LIMIT 1
+        """,
+        (person_id, CHANNEL, str(chat_id), str(external_message_id)),
+    )
+    return row["message_id"] if row else None
+
+
+async def _latest_reply(connection: AsyncConnection, person_id: int) -> int | None:
+    """The assistant message most recently delivered as text or a poll."""
+    row = await _one(
+        connection,
+        """
+        SELECT message_id FROM outbox
+        WHERE person_id = %s AND status = 'sent' AND message_id IS NOT NULL
+          AND kind IN ('rich', 'plain', 'poll')
+        ORDER BY sent_at DESC, id DESC LIMIT 1
+        """,
+        (person_id,),
+    )
+    return row["message_id"] if row else None
+
+
+async def _record_feedback(
+    connection: AsyncConnection, person_id: int, envelope: Envelope, event_id: int, now: datetime
+) -> None:
+    """Apply a channel's feedback gesture to the assistant message it is about.
+
+    A reaction applies only to the message it is on; a note on anything other than
+    an assistant message applies to the latest reply.
+    """
+    target = None
+    if envelope.feedback_target_message_id is not None:
+        target = await _reply_for_channel_message(
+            connection, person_id, envelope.chat_id, envelope.feedback_target_message_id
+        )
+    if target is None and envelope.kind != "reaction":
+        target = await _latest_reply(connection, person_id)
+    if target is None:
+        logger.info("Feedback from event %d has no reply to apply to", event_id)
+        return
+    if envelope.feedback == "withdraw":
+        await feedback_store.withdraw(connection, person_id, target, now=now)
+    elif envelope.feedback == "note" and envelope.feedback_note:
+        await feedback_store.note(
+            connection,
+            person_id,
+            target,
+            envelope.feedback_note,
+            source_event_id=event_id,
+            now=now,
+        )
+    else:
+        await feedback_store.flag(connection, person_id, target, source_event_id=event_id, now=now)
+    if envelope.acknowledge_with is not None and envelope.message_id is not None:
+        await connection.execute(
+            """
+            INSERT INTO outbox (person_id, channel, external_chat_id, chunk_index, kind, payload,
+                status, created_at)
+            VALUES (%s, %s, %s, 0, 'reaction', %s, 'pending', %s)
+            """,
+            (
+                person_id,
+                CHANNEL,
+                str(envelope.chat_id),
+                Jsonb(
+                    {
+                        "target_message_id": str(envelope.message_id),
+                        "emoji": envelope.acknowledge_with,
+                    }
+                ),
+                now,
+            ),
+        )
 
 
 async def _unused_button(
