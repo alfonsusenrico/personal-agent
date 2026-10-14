@@ -1,0 +1,25 @@
+name: intro-review
+description: /start after a saved introduction reviews the profile; a change is saved with Save.
+seed_profile:
+  address: Sam
+  assistant_name: Nara
+  language: English
+  timezone: Asia/Jakarta
+steps:
+  - send: "/start"
+  - settle: true
+  - wait: 20
+  - send: "call me Sammy instead"
+  - press: "Save"
+fake_replies:
+  - "Here's what I know about you."
+  - "Sure, Sammy.<pa-profile field=\"address\">Sammy</pa-profile>"
+  - "All set, Sammy."
+expect:
+  introduction_state: completed
+  profile_active:
+    address: Sammy
+    assistant_name: Nara
+  pending_fields: []
+expect_fake:
+  sent_contains: ["Skipped: Reply style", "- **What to call you:** Sammy"]

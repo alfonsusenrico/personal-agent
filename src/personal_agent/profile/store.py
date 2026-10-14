@@ -115,8 +115,9 @@ async def mark_offered(connection: AsyncConnection, person_id: int, now: datetim
 
 
 async def start_introduction(connection: AsyncConnection, person_id: int, now: datetime) -> None:
-    """Begin or resume the introduction. After a completed one, the drafts start from the
-    active profile, so the owner reviews it and changes only what they want."""
+    """Begin or resume the introduction. After a completed one it is a review: the drafts
+    start from the active profile and topics without a value stay skipped, so the
+    summary comes at once and the owner changes only what they want."""
     current = await introduction(connection, person_id, lock=True)
     if current is not None and current.state == "active":
         return
@@ -141,6 +142,12 @@ async def start_introduction(connection: AsyncConnection, person_id: int, now: d
             FROM profile_entry WHERE person_id = %s AND status = 'active'
             """,
             (now, person_id),
+        )
+    if restarting:
+        drafted = {entry.field for entry in await entries(connection, person_id, "draft")}
+        await connection.execute(
+            "UPDATE introduction SET skipped = %s WHERE person_id = %s",
+            ([field for field in FIELDS if field not in drafted], person_id),
         )
     logger.info("Introduction started for person %d", person_id)
 

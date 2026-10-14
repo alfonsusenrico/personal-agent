@@ -218,7 +218,11 @@ async def test_restarting_a_completed_introduction_starts_from_the_profile(
 
         drafts = await store.entries(connection, person_id, "draft")
         assert [(entry.field, entry.value) for entry in drafts] == [("address", "Sam")]
-        assert await store.introduction(connection, person_id) == store.Introduction("active", ())
+        # A review: topics without a value stay skipped, so nothing is asked again.
+        intro = await store.introduction(connection, person_id)
+        assert intro is not None and intro.state == "active"
+        assert "address" not in intro.skipped and "work" in intro.skipped
+        assert len(intro.skipped) == 7
         assert await store.save_introduction(connection, person_id, NOW) == []
         assert await _values(connection, person_id) == [("address", "Sam", "active")]
 

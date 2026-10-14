@@ -93,8 +93,12 @@ Table `introduction`: `person_id` (primary key), `state` (`offered`,
   answer, and code appends Start and Later buttons; the row is inserted as
   `offered` with the answer, so the offer happens once.
 - **Start** (button or `/start`): state `active`. `/start` when `completed`
-  starts a new introduction whose drafts are prefilled from the active
-  profile.
+  starts a review: drafts are prefilled from the active profile and topics
+  without a value stay skipped, so the summary comes at once and a stated
+  change shows an updated summary to save. In the live check, re-entering
+  question mode for a skipped topic held "call me Enrico again" as an
+  unsaved answer with no Save in sight; a skipped topic can still be filled
+  later by stating it in chat (a proposal with Confirm).
 - **Later:** state `declined`; never offered again.
 - **While `active`:** the context note lists answered topics (with their
   draft values), skipped topics, and the open topics in order. An answer is

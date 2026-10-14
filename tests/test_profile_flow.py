@@ -233,13 +233,10 @@ async def test_start_after_saving_shows_the_profile_to_review(
 ) -> None:
     agent.responses.script = [
         "/start received. What should I call you?",
-        "Here's what I have."
-        + ALL_TOPICS.replace(
-            '<pa-profile field="interests" skip="true"/>',
-            '<pa-profile field="interests">Cycling</pa-profile>',
-        ),
+        f"Here's what I have.{ALL_TOPICS}",
         "All set, Sam.",
         "Here's what I know about you; change anything you like.",
+        'Sure.<pa-profile field="address">Sammy</pa-profile>',
     ]
     await _say(agent, 1, "/start")
     await _say(agent, 2, "all the answers")
@@ -248,7 +245,13 @@ async def test_start_after_saving_shows_the_profile_to_review(
 
     review = agent.server.sent_texts[-1]
     assert review.startswith("Here's what I know about you")
-    assert "- **What to call you:** Sam" in review and "Save" in review
+    assert "- **What to call you:** Sam" in review and "Skipped: Interests" in review
+    assert "Save" in review
+
+    await _say(agent, 5, "call me Sammy again")
+
+    assert "- **What to call you:** Sammy" in agent.server.sent_texts[-1]
+    assert "Save" in agent.server.sent_texts[-1]
 
 
 async def test_start_resumes_with_the_answers_so_far(
