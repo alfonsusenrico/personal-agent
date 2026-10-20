@@ -7,13 +7,18 @@ storing means Telegram delivers the update again; a stored duplicate is skipped.
 After a button press is stored, the press is acknowledged and the message is redrawn
 with the chosen option; a Stop press is passed to the runner. Both are cosmetic or
 covered by stored state, so their failures are only logged.
+
+`status` records when a poll last stored its updates and whether another consumer holds
+the bot, for the health endpoint.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
 import psycopg
 from psycopg_pool import AsyncConnectionPool
@@ -39,6 +44,15 @@ UNAVAILABLE_CHOICE = "No longer available · Sudah tidak berlaku"
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class PollingStatus:
+    # time.monotonic() when a poll last ended with its updates stored; None before that.
+    last_success: float | None = None
+    # Telegram answered 409 since the last success: another getUpdates consumer or a
+    # webhook holds the bot.
+    conflict: bool = False
+
+
 class Poller:
     def __init__(
         self,
@@ -52,6 +66,7 @@ class Poller:
         on_stop: Callable[[int], None] = lambda _turn_id: None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         long_poll_seconds: int = LONG_POLL_SECONDS,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._pool = pool
         self._telegram = telegram
@@ -62,7 +77,9 @@ class Poller:
         self._on_stop = on_stop
         self._sleep = sleep
         self._long_poll_seconds = long_poll_seconds
+        self._monotonic = monotonic
         self._offset: int | None = None
+        self.status = PollingStatus()
 
     async def poll_once(self) -> None:
         updates = await self._telegram.get_updates(
@@ -127,9 +144,12 @@ class Poller:
         while True:
             try:
                 await self.poll_once()
+                self.status.last_success = self._monotonic()
+                self.status.conflict = False
                 backoff = 1.0
                 continue
             except TelegramConflict:
+                self.status.conflict = True
                 logger.warning("Another getUpdates consumer or a webhook holds this bot")
                 await self._sleep(_CONFLICT_WAIT_SECONDS)
                 continue

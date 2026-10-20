@@ -14,11 +14,18 @@ FROM python:3.13-slim-trixie AS runtime
 RUN useradd --system --uid 10001 --no-create-home agent
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
-ARG APP_REVISION=unknown
+# The full commit, set by CI; the worker's health endpoint reports it.
+ARG AF_REVISION=unknown
+LABEL org.opencontainers.image.source="https://github.com/alfonsusenrico/personal-agent" \
+      org.opencontainers.image.revision=${AF_REVISION}
+# Inside the container the health endpoint listens on every interface; Compose publishes
+# it on loopback only.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    APP_REVISION=${APP_REVISION}
+    APP_REVISION=${AF_REVISION} \
+    HEALTH_HOST=0.0.0.0
+EXPOSE 8080
 USER agent
 CMD ["personal-agent-worker"]
 

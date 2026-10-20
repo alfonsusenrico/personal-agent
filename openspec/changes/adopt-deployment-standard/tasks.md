@@ -2,23 +2,23 @@
 
 ## 1. Repository
 
-- [ ] 1.1 Settings: `*_FILE` secrets, database URL from parts, `AF_REVISION`. Verify:
-  settings tests (files read, errors name variables never values, 0640 accepted, other
-  modes refused).
-- [ ] 1.2 Worker health endpoint (loopback): revision, polling, database, conflict.
+- [x] 1.1 Settings: `*_FILE` secrets, database URL from parts, `AF_REVISION`. Verify:
+  settings tests (files read, errors name variables never values, 0640 and 0600 accepted,
+  modes open to others or group-writable refused).
+- [x] 1.2 Worker health endpoint (loopback): revision, polling, database, conflict.
   Verify: tests for healthy, polling stalled, Telegram 409, database down; no content in
   the response.
-- [ ] 1.3 Deploy files, the backup hook, framework tools copied from a framework commit,
+- [x] 1.3 Deploy files, the backup hook, framework tools copied from a framework commit,
   Compose for production. Verify: `contracts.py` on both manifests; the hook writes and
   checks a restic snapshot against a throwaway database.
 - [ ] 1.4 CI: `ci.yml` (Postgres service, `REQUIRE_DB=1`, contract test, both image
   targets), `release.yml`, `af-release.yml`; `default:ci` override removed. Verify:
   actionlint; a green pull request run.
-- [ ] 1.5 Engine rehearsal on the laptop against a loopback registry: install, upgrade with
+- [x] 1.5 Engine rehearsal on the laptop against a loopback registry: install, upgrade with
   a migration (the hook's backup written and checked), a release reporting the wrong
   revision (restored), health unhealthy on a 409 from a fake Telegram. Verify: rehearsal
   output in `verification.md`.
-- [ ] 1.6 Docs: deployment guide, `AGENTS.md` (capability `deployed`, the backup debt with
+- [x] 1.6 Docs: deployment guide, `AGENTS.md` (capability `deployed`, the backup debt with
   its payback), README. Verify: `openspec validate --all --strict`.
 
 Expected Result: the engine can deploy the agent unattended and safely.

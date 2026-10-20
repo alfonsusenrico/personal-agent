@@ -1,0 +1,87 @@
+# Releases by the deployment standard (agent-framework contracts v1; adapted from its
+# release.example.yml). The server's pull agent deploys `release-production`.
+#
+# - push to main      -> checks, then build once (amd64 and arm64), sign, publish the
+#                        commit's release record (release-staging; no staging host yet)
+# - push tag vX.Y.Z   -> the tag must match the package version; promote that commit's
+#                        record to release-production without rebuilding
+# - manual run        -> roll production back to an earlier published commit
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to roll back.
+        type: choice
+        options: [production]
+      commit:
+        description: Full SHA of the earlier published commit to return to.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/af-release.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      mode: publish
+      commit: ${{ github.sha }}
+    secrets: inherit
+
+  tag-version:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The tag must match the package version
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -1)"
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $version"; exit 1
+          fi
+
+  promote:
+    needs: tag-version
+    uses: ./.github/workflows/af-release.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      mode: promote
+      commit: ${{ github.sha }}
+      version: ${{ github.ref_name }}
+    secrets: inherit
+
+  rollback:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/af-release.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      mode: rollback
+      commit: ${{ inputs.commit }}
+      environment: ${{ inputs.environment }}
+    secrets: inherit

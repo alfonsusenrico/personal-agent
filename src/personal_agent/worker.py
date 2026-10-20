@@ -16,8 +16,9 @@ import psycopg
 
 from personal_agent.clock import utc_now
 from personal_agent.conversation.runner import RunnerConfig, TurnRunner
-from personal_agent.db.pool import create_pool
+from personal_agent.db.pool import create_pool, database_ready
 from personal_agent.gateway.api import AuthenticationError, GatewayClient, GatewayError
+from personal_agent.health import HealthEndpoint
 from personal_agent.logging_setup import configure_logging
 from personal_agent.settings import SettingsError, WorkerSettings, load_worker_settings
 from personal_agent.telegram.api import TelegramApi, TelegramError
@@ -70,7 +71,7 @@ async def run(settings: WorkerSettings) -> int:
         logger.error("Another worker holds the worker lock; exiting")
         return EXIT_LOCKED
     pool = create_pool(settings)
-    telegram = TelegramApi(settings.telegram_bot_token)
+    telegram = TelegramApi(settings.telegram_bot_token, base_url=str(settings.telegram_api_url))
     gateway = GatewayClient(str(settings.gateway_url), settings.gateway_api_key.get_secret_value())
     try:
         await pool.open(wait=True, timeout=10)
@@ -109,6 +110,16 @@ async def run(settings: WorkerSettings) -> int:
             on_stop=runner.request_stop,
         )
         sender = Sender(pool, telegram, clock=utc_now)
+        health = HealthEndpoint(
+            revision=settings.app_revision,
+            polling=poller.status,
+            database_ready=lambda: database_ready(pool),
+        )
+        try:
+            health_server = await health.serve(settings.health_host, settings.health_port)
+        except OSError as exc:
+            logger.error("Health endpoint cannot listen: %s", type(exc).__name__)
+            return EXIT_CONFIG
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGTERM, signal.SIGINT):
@@ -126,6 +137,7 @@ async def run(settings: WorkerSettings) -> int:
             task.cancel()
         results = await asyncio.gather(*tasks, return_exceptions=True)
         stopped.cancel()
+        health_server.close()
         if crashed:
             # The loops never return on their own; any that ended has failed.
             for task, result in zip(tasks, results, strict=True):

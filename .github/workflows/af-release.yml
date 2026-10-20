@@ -1,0 +1,175 @@
+# Copied from agent-framework d36ea7a (skills/release-delivery/assets/ci/github/workflows/release.yml); do not edit here.
+# agent-framework CI template: publish, promote, or roll back a release (contracts v1).
+# Capability: deployed. Runs af_publish.py from the framework deploy assets copied into the
+# project (tools_dir, default deploy/af). The image is built once on `main` and promoted by
+# digest; hosts pull the signed release record from `release-<environment>`.
+# Callers pass `secrets: inherit`; COSIGN_PRIVATE_KEY and COSIGN_PASSWORD reach the script
+# only through env. Production promotion is gated by protected `v*` tags (and environment
+# reviewers where the plan allows them).
+name: release
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: publish (main commit to staging), promote (tag to production), or rollback.
+        type: string
+        required: true
+      commit:
+        description: Full commit SHA.
+        type: string
+        required: true
+      version:
+        description: vMAJOR.MINOR.PATCH for promote.
+        type: string
+        default: ""
+      environment:
+        description: Environment for rollback (staging or production).
+        type: string
+        default: ""
+      tools_dir:
+        description: Directory holding af_publish.py and contracts.py.
+        type: string
+        default: deploy/af
+      public_key:
+        description: The project's release signing public key, committed in the repository.
+        type: string
+        default: deploy/release-signing.pub
+      release_ref:
+        description: Ref that promoted and rolled-back commits must be ancestors of.
+        type: string
+        default: origin/main
+      publish_wait_minutes:
+        description: How long a promotion waits for the commit's release to be published (a tag pushed right after the merge).
+        type: number
+        default: 30
+      runner:
+        description: Runner label.
+        type: string
+        default: ubuntu-24.04
+      timeout_minutes:
+        description: Job timeout in minutes.
+        type: number
+        default: 45
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: ${{ inputs.mode }} ${{ inputs.environment || inputs.version || 'staging' }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    permissions:
+      contents: read
+      packages: write
+    # One release change per environment at a time; a newer run waits.
+    concurrency:
+      group: release-${{ inputs.mode == 'rollback' && inputs.environment || inputs.mode == 'promote' && 'production' || 'staging' }}
+      cancel-in-progress: false
+    env:
+      COSIGN_VERSION: v3.1.3
+      COSIGN_SHA256: 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71
+      ORAS_VERSION: 1.3.5
+      ORAS_SHA256: f48a73ea6d026a862c3919fc773da9a8c86fc259c2c737d5baed3b8b9614ad22
+      AF_BINFMT_IMAGE: tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+      AF_BUILDKIT_IMAGE: moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+    steps:
+      - name: Validate inputs
+        env:
+          MODE: ${{ inputs.mode }}
+          COMMIT: ${{ inputs.commit }}
+          VERSION: ${{ inputs.version }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          if [[ ! "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::commit must be a full 40-character commit SHA"; exit 1
+          fi
+          case "$MODE" in
+            publish) ;;
+            promote)
+              if [[ ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+                echo "::error::promote needs version vMAJOR.MINOR.PATCH"; exit 1
+              fi ;;
+            rollback)
+              if [[ ! "$ENVIRONMENT" =~ ^[a-z][a-z0-9-]{0,31}$ ]]; then
+                echo "::error::rollback needs an environment"; exit 1
+              fi ;;
+            *) echo "::error::mode must be publish, promote, or rollback"; exit 1 ;;
+          esac
+
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ inputs.commit }}
+
+      - name: Require a commit on the release branch
+        env:
+          COMMIT: ${{ inputs.commit }}
+          RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          if ! git merge-base --is-ancestor "$COMMIT" "$RELEASE_REF"; then
+            echo "::error::$COMMIT is not on $RELEASE_REF"; exit 1
+          fi
+
+      - name: Install cosign and oras (checksum-verified)
+        run: |
+          install -d -m 0755 "$RUNNER_TEMP/af-bin"
+          curl -fsSL -o "$RUNNER_TEMP/af-bin/cosign" \
+            "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64"
+          echo "${COSIGN_SHA256}  $RUNNER_TEMP/af-bin/cosign" | sha256sum --check --strict
+          curl -fsSL -o "$RUNNER_TEMP/oras.tar.gz" \
+            "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          echo "${ORAS_SHA256}  $RUNNER_TEMP/oras.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/oras.tar.gz" -C "$RUNNER_TEMP/af-bin" oras
+          chmod 0755 "$RUNNER_TEMP/af-bin/cosign"
+          echo "$RUNNER_TEMP/af-bin" >> "$GITHUB_PATH"
+
+      - name: Log in to the registry
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/af-docker" >> "$GITHUB_ENV"
+          export DOCKER_CONFIG="$RUNNER_TEMP/af-docker"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+
+      - name: Prepare multi-architecture builds
+        if: inputs.mode == 'publish'
+        run: |
+          docker run --rm --privileged "$AF_BINFMT_IMAGE" --install arm64
+          docker buildx create --use --name af-release --driver docker-container \
+            --driver-opt "image=$AF_BUILDKIT_IMAGE"
+
+      - name: Run af_publish.py
+        env:
+          MODE: ${{ inputs.mode }}
+          COMMIT: ${{ inputs.commit }}
+          VERSION: ${{ inputs.version }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          TOOLS_DIR: ${{ inputs.tools_dir }}
+          PUBLIC_KEY: ${{ inputs.public_key }}
+          PUBLISH_WAIT: ${{ inputs.publish_wait_minutes }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+          CI_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          case "$MODE" in
+            publish)
+              python3 "$TOOLS_DIR/af_publish.py" publish --repository "$repository" --commit "$COMMIT" \
+                --source "$SOURCE" --ci-run "$CI_RUN" ;;
+            promote)
+              python3 "$TOOLS_DIR/af_publish.py" promote --repository "$repository" --commit "$COMMIT" \
+                --version "$VERSION" --ci-run "$CI_RUN" --public-key "$PUBLIC_KEY" --wait-minutes "$PUBLISH_WAIT" ;;
+            rollback)
+              python3 "$TOOLS_DIR/af_publish.py" rollback --repository "$repository" --commit "$COMMIT" \
+                --environment "$ENVIRONMENT" --ci-run "$CI_RUN" --public-key "$PUBLIC_KEY" ;;
+          esac
+
+      - name: Remove registry credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/af-docker"

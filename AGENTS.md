@@ -18,7 +18,7 @@ The owner's personal assistant over Telegram, and the first consumer of
     in code;
   - stores or caches web search results (search provider terms).
 
-Capabilities: database, personal-data, background-jobs, llm
+Capabilities: database, deployed, personal-data, background-jobs, llm
 Design surface: Telegram conversation (no web UI)
 Language: code, identifiers, logs, and docs are English. The assistant
 replies in the language of the owner's latest message; fixed notices are in
@@ -37,8 +37,11 @@ docker compose up --build migrate      # apply migrations to the local database
 ./scripts/converse                     # conversation scripts on the gateway stub (free)
 ./scripts/review --summary             # open flag counts and backup age (agents: --summary only)
 ./scripts/restore-check                # restore the newest backup into a throwaway database
-REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free stub replies
+REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free stub replies (only while the server's worker is stopped)
 ```
+
+Releases: merge to `main` publishes, a `vX.Y.Z` tag deploys production
+(`docs/deployment.md`).
 
 ## Architecture map
 
@@ -51,7 +54,9 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   - `migrate.py`: the checksummed, forward-only runner.
   - `migrations/NNNN_name.sql`: hand-written migrations.
 - `src/personal_agent/worker.py`: the worker process (advisory lock, startup
-  checks, poller, turn runner, sender).
+  checks, poller, turn runner, sender, health endpoint).
+- `src/personal_agent/health.py`: `GET /health` (revision, polling, database)
+  for the release engine and the server's monitor.
 - `src/personal_agent/telegram/`: Bot API client (`api.py`), update
   envelope and allowlist (`updates.py`), store-then-confirm poller (button
   presses, votes, Stop), outbox sender with plain-text fallback, streamed
@@ -93,6 +98,11 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   missing database fail. `fakes.py` and `harness.py` drive the real poller,
   runner, and sender against a fake Telegram server and a fake gateway;
   `conversations/*.yaml` are the synthetic conversation scripts.
+- `deploy/`: the deployment standard's files: `release.toml` (images `app` and
+  `backup`, stop-start, migrations, health), `settings.toml` (every runtime name
+  and its source), `env/production.env`, `compose.production.yaml` (file
+  secrets, the gateway's network), `hooks/backup` (pre-migration backup), and
+  the framework copies in `af/`. `.github/workflows/`: CI and releases.
 - The phased plan is local-only in `research/notes/`; this repository is
   public, so `research/` is ignored by git. Specs are in `openspec/specs/`.
 
@@ -131,17 +141,15 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   owner's employer or other organisations' systems. Planning notes stay in
   the git-ignored `research/`.
 - Code reaches `main` only through owner-reviewed pull requests from topic
-  branches. Everything runs locally until the owner accepts it for
-  deployment.
-
-## Overrides
-
-- `default:ci`: hosted CI is on hold until the owner accepts the agent for
-  deployment (owner, 2026-10-13). `./scripts/check` is the gate and runs
-  before every commit. The framework hooks enforce commit messages and
-  protected-branch pushes.
+  branches. Production changes only through the release pipeline: a merge
+  publishes, the owner's tag deploys. Never start a worker on the production
+  bot outside it; Telegram allows one poller.
+- Debt (owner decision, 2026-10-20): backups have no off-host copy. Payback: a
+  follow-up change adds a restic copy to a second location two weeks after the
+  first production deployment.
 
 ## References
 
-`openspec/specs/`; `openspec/changes/`; the local plan in `research/notes/`;
-the gateway's published API reference for the call contract.
+`openspec/specs/`; `openspec/changes/`; `docs/deployment.md`; the local plan
+in `research/notes/`; the gateway's published API reference for the call
+contract.

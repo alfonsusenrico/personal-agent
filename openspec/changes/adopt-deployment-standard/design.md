@@ -14,13 +14,17 @@ runs the deployment standard's engine, pull agent, and monitor, and the producti
 
 ### 1. Release shape
 
-- Images: `app` (the `runtime` target: migrate and worker) and `backup` (the `backup`
-  target), built once in CI for amd64 and arm64.
+- Images: `app` (the `runtime` stage: migrate and worker) and `backup` (the `backup`
+  stage), built once in CI for amd64 and arm64 from the one Dockerfile; each
+  `[[images]]` entry names its stage with `target` (added to the framework for this,
+  agent-framework #36).
 - `switch = "stop-start"`, `drain_seconds = 30`: the worker stops between steps; a reply
   in progress is finished after the restart by the existing exactly-once rules (the
   gateway call is waited for, never paid twice).
-- `migrate` runs `personal-agent-migrate` with its dependencies; production
-  `backup = "required"`, so every release with a migration first runs the backup hook.
+- `migrate` runs `personal-agent-migrate` in a one-off `worker` container with its
+  dependencies (the local `migrate` service is off in production); production
+  `backup = "required"`, so every release after the first runs the backup hook before
+  migrating.
 - `keep = 5` releases.
 
 Rejected: blue-green (two pollers for one bot would split updates).
@@ -30,9 +34,12 @@ Rejected: blue-green (two pollers for one bot would split updates).
 The worker serves `GET /health` on a container port (8080), published on a loopback port
 only: `{"status", "revision", "polling", "database"}`, 200 when the last poll ended within
 the last 90 seconds without a conflict and the database answers, 503 otherwise (no
-content, no identifiers beyond the revision). The engine checks it after each start; the
-monitor checks it every few minutes and notifies `unhealthy` and `recovered`. It is a few
-lines of asyncio stream handling (no web framework).
+content, no identifiers beyond the revision); it is unhealthy until the first poll ends,
+which takes at most one long poll (30 seconds), well inside the engine's two minutes. The
+engine checks it after each start; the monitor checks it every few minutes and notifies
+`unhealthy` and `recovered`. It is a few lines of asyncio stream handling (no web
+framework). The Bot API base URL becomes a setting (`TELEGRAM_API_URL`, default Telegram's)
+so the rehearsal can run the real image against a fake Bot API; production never sets it.
 
 Rejected: a container `HEALTHCHECK` only (the standard's engine and monitor need the
 revision over HTTP); a framework change for command-based health checks (the agent needs
@@ -42,8 +49,10 @@ revision over HTTP); a framework change for command-based health checks (the age
 
 - Secrets as files (0640, the engine's `group_add`): `POSTGRES_PASSWORD`,
   `TELEGRAM_BOT_TOKEN`, `GATEWAY_API_KEY`, `RESTIC_PASSWORD`; the settings accept
-  `NAME_FILE` for each, and the database URL is built from `POSTGRES_*` parts, so no URL
-  with a password is ever written.
+  `NAME_FILE` for each, and the database URL is built from `DATABASE_HOST`,
+  `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD_FILE`, as the gateway does, so
+  no URL with a password is ever written. A secret file open to others or writable by its
+  group is refused.
 - Placement (host, never committed): `TELEGRAM_ALLOWED_USER_IDS`, `BACKUP_DIR`,
   `AGENT_HEALTH_PORT`, `AGENT_GATEWAY_NETWORK`.
 - Committed defaults (`deploy/env/production.env`): `GATEWAY_URL=http://api:8000`,
@@ -54,9 +63,15 @@ revision over HTTP); a framework change for command-based health checks (the age
 
 ### 4. Backups
 
-- Before a migration, `deploy/hooks/backup` starts `db`, streams `pg_dump` into
-  `restic backup --stdin` in a new repository in `$AF_BACKUP_DIR` (password from the
-  `RESTIC_PASSWORD` secret), and runs `restic check`; a failure stops the deployment.
+- Before a migration, `deploy/hooks/backup` starts `db` and runs the backup image as the
+  deploy user (who owns `$AF_BACKUP_DIR`): a new restic repository there, one snapshot from
+  `restic backup --stdin-from-command -- pg_dump` (a failing dump leaves no snapshot;
+  password from the `RESTIC_PASSWORD` secret; the daily backups' host and file name, so
+  the restore check can read it), then `restic check --read-data`. A failure stops the
+  deployment before any migration; with a schema change the engine leaves the services
+  stopped for the owner (exit 5), with the data as it was.
+- The engine runs the hook only when a previous release exists, so the first deployment
+  has none; the laptop's final backup covers it (decision 6).
 - The daily backup service runs in production as on the laptop, into `BACKUP_DIR` on the
   server, with the same retention and checks.
 - **Debt (owner decision):** no off-host copy yet. Payback: a follow-up change adds a
@@ -80,8 +95,12 @@ already exist in the project's contract.
 One bot, one poller, one database:
 
 1. The laptop worker stays stopped (it is today); stop the laptop backup service.
-2. Take a final laptop backup and a sealed dump; restore it into the server database in
-   one transaction; compare row counts per table and a content checksum.
+2. Take a final laptop backup. The engine has no step between fetching a release and
+   starting it, so the server database is prepared before the first deployment: create
+   the volume `personal-agent-production_db-data` with Compose's project and volume
+   labels, initialise it with a one-off `postgres:16-alpine` using the `POSTGRES_PASSWORD`
+   secret, and stream the laptop dump over SSH into `pg_restore --single-transaction`;
+   compare row counts per table and a content checksum (hashes and counts only).
 3. First deployment (`v0.1.0`): the migration step finds the schema current.
 4. The owner sends a message on Telegram and gets a reply; flags and `/profile` work.
 5. The laptop database stays stopped as a fallback for two weeks, then is removed with

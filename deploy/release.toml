@@ -1,0 +1,41 @@
+# How the release engine deploys the agent (deployment standard, contracts v1 §4).
+af_standard = 1
+project = "personal-agent"
+compose_files = ["compose.yaml", "deploy/compose.production.yaml"]
+
+# Settings are checked when each command starts; no separate preflight.
+preflight = []
+# One-off, before start, with the worker's settings and secrets. The runner is
+# forward-only and checksummed, so a current schema is a no-op.
+migrate = ["personal-agent-migrate"]
+migrate_service = "worker"
+schema_version = { glob = "src/personal_agent/db/migrations/*.sql" }
+
+# Telegram allows one poller per bot, so the old worker stops before the new one starts.
+# A reply in progress is finished after the restart by the exactly-once rules.
+switch = "stop-start"
+drain_seconds = 30
+
+[health]
+service = "worker"
+path = "/health"
+revision_key = "revision"
+port = 8080
+
+[[images]]
+name = "app"
+dockerfile = "Dockerfile"
+context = "."
+target = "runtime"
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[images]]
+name = "backup"
+dockerfile = "Dockerfile"
+context = "."
+target = "backup"
+platforms = ["linux/amd64", "linux/arm64"]
+
+[environments.production]
+keep = 5
+backup = "required"

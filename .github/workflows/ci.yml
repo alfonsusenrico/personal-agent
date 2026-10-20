@@ -1,0 +1,55 @@
+# Checks for pull requests; release.yml calls this workflow before publishing `main`.
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agent_test
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: agent_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agent_test -d agent_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      # scripts/test sets REQUIRE_DB=1, so database tests fail instead of skipping.
+      TEST_DATABASE_URL: postgresql://agent_test:synthetic-ci-only@127.0.0.1:5432/agent_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+      - name: Install OpenSpec
+        run: npm install --global --ignore-scripts @fission-ai/openspec@1.14.1
+      - run: uv sync --locked
+      - run: ./scripts/check
+      - name: Contract test against the published gateway image
+        env:
+          # The gateway release the agent is verified against, as a black box (public image).
+          PA_CONTRACT_IMAGE: ghcr.io/alfonsusenrico/llm-gateway/gateway@sha256:2e24e95b39b9aea94d11334546dcb628d7fcaff3efc37596afa6a3d934414839
+        run: uv run pytest -q tests/test_gateway_contract.py
+      - name: Build both images
+        run: |
+          docker build --target runtime --build-arg AF_REVISION="$GITHUB_SHA" -t personal-agent:check .
+          docker build --target backup --build-arg AF_REVISION="$GITHUB_SHA" -t personal-agent-backup:check .
+      - name: Verify the images
+        run: |
+          docker run --rm --entrypoint python personal-agent:check -c \
+            "import importlib.util, os; assert importlib.util.find_spec('llm_gateway') is None; import personal_agent.worker; assert os.environ['APP_REVISION'] == '$GITHUB_SHA'"
+          docker run --rm --entrypoint sh personal-agent-backup:check -c \
+            "restic version && pg_dump --version | grep -q ' 16\.'"
