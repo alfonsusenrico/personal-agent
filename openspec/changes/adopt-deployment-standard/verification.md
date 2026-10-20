@@ -43,9 +43,16 @@ engine stopped for the owner (exit 5), as it should. The script was fixed and re
   even though nothing migrated. Restoring the previous release there would be safe; this is
   a possible framework improvement, not needed for this change.
 
+## Pull request and release
+
+- PR #13: CI passed (checks with Postgres, contract test, both images), 1 min 41 s.
+- `deploy/af/` matches agent-framework `59cd9c4` (PR #36 merged; identical to the branch
+  commit `d9f9076` it was first copied from).
+- The first publish from `main` (`5dc604d`) failed: #13 merged before the signing-key
+  secrets existed, and a run reads secrets when it starts. The secrets were stored by the
+  owner's script and the failed job was re-run; the public key is committed in
+  `deploy/release-signing.pub`.
+
 ## Not verified yet
 
-- A green pull request run (task 1.4), and everything in phase 2 (owner steps, cutover,
-  `v0.1.0`, the Telegram check).
-- `deploy/af/` is copied from agent-framework `d9f9076` (PR #36, `[[images]] target`), not
-  yet merged; refresh the copies to the merge commit before this change merges.
+- Everything in phase 2 (owner steps, cutover, `v0.1.0`, the Telegram check).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copied from agent-framework d9f9076 (skills/release-delivery/assets/deploy); do not edit here.
+# Copied from agent-framework 59cd9c4 (skills/release-delivery/assets/deploy); do not edit here.
 """Publish releases from CI (contracts v1, §1-3 and §8). Same script on GitHub and GitLab.
 
     af_publish.py publish  --repository R --commit SHA --source URL --ci-run URL

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copied from agent-framework d9f9076 (skills/release-delivery/assets/deploy); do not edit here.
+# Copied from agent-framework 59cd9c4 (skills/release-delivery/assets/deploy); do not edit here.
 """Checks for the deployment contracts v1 (references/deployment-contracts.md).
 
 Standard library only (Python 3.11+). CI runs these before publishing, the engine before
