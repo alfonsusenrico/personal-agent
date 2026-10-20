@@ -5,13 +5,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for name in TEST_DATABASE_URL; do
-  if [[ -z "${!name:-}" && -f .env ]]; then
-    value="$(sed -n "s/^${name}=\([^ ]*\).*/\1/p" .env)"
-    if [[ -n "$value" ]]; then
-      export "${name}=${value}"
-    fi
+if [[ -z "${TEST_DATABASE_URL:-}" && -f .env ]]; then
+  value="$(sed -n 's/^TEST_DATABASE_URL=\([^ ]*\).*/\1/p' .env)"
+  if [[ -n "$value" ]]; then
+    export TEST_DATABASE_URL="$value"
   fi
-done
+fi
 export REQUIRE_DB=1
 exec uv run pytest "$@"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run every project check, as the pre-push hook does: lock, format, lint, types, tests
-# (database tests required), compose config, and OpenSpec validation.
+# (database tests required), compose config, deploy manifests, and OpenSpec validation.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,5 +9,15 @@ uv run ruff format --check
 uv run ruff check
 uv run pyright
 ./scripts/test -q
-docker compose config -q
+# Compose files with synthetic values (no .env): the local stack, and the server's
+# combination as the release engine runs it.
+env TELEGRAM_ALLOWED_USER_IDS=1001 BACKUP_DIR=/tmp/backups \
+  docker compose --env-file /dev/null config -q
+env AF_IMAGE_APP=app AF_IMAGE_BACKUP=backup AF_SECRETS_DIR=/run/af AF_SECRETS_GID=1000 \
+  TELEGRAM_ALLOWED_USER_IDS=1001 BACKUP_DIR=/srv/backups AGENT_HEALTH_PORT=8380 \
+  AGENT_GATEWAY_NETWORK=gateway \
+  docker compose --env-file deploy/env/production.env \
+  --file compose.yaml --file deploy/compose.production.yaml config -q
+python3 deploy/af/contracts.py project-config deploy/release.toml
+python3 deploy/af/contracts.py settings deploy/settings.toml
 openspec validate --all --no-interactive

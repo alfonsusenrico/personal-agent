@@ -1,0 +1,69 @@
+# Production overlay for the deployment standard (deploy/release.toml lists it after
+# compose.yaml). The release engine supplies the runtime env file, image references
+# (AF_IMAGE_APP, AF_IMAGE_BACKUP), and the secrets directory; values never enter env files.
+# - Secrets are Compose file secrets read through *_FILE settings; the agent user joins
+#   the secrets group (AF_SECRETS_GID) to read them.
+# - The engine runs migrations itself (`migrate` in deploy/release.toml), so the local
+#   `migrate` service is off and the worker and backup wait only for the database.
+# - The worker joins the production gateway's network (AGENT_GATEWAY_NETWORK).
+x-database-settings: &database-settings
+  DATABASE_URL: ""
+  DATABASE_HOST: db
+  DATABASE_NAME: ${POSTGRES_DB:?Run through the release engine}
+  DATABASE_USER: ${POSTGRES_USER:?Run through the release engine}
+  DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+
+services:
+  db:
+    environment:
+      # Postgres reads the file as root before it drops privileges.
+      POSTGRES_PASSWORD: ""
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    # Only the stack itself reaches the database on the server.
+    ports: !reset []
+
+  migrate:
+    profiles: [local]
+
+  worker:
+    environment:
+      <<: *database-settings
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      GATEWAY_URL: ${GATEWAY_URL:?Run through the release engine}
+      GATEWAY_API_KEY: ""
+      GATEWAY_API_KEY_FILE: /run/secrets/gateway_api_key
+    secrets: [postgres_password, telegram_bot_token, gateway_api_key]
+    group_add: ["${AF_SECRETS_GID:?Run through the release engine}"]
+    extra_hosts: !reset []
+    depends_on: !override
+      db:
+        condition: service_healthy
+    networks: [default, gateway]
+
+  backup:
+    environment:
+      <<: *database-settings
+      RESTIC_PASSWORD: ""
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+    secrets: [postgres_password, restic_password]
+    group_add: ["${AF_SECRETS_GID:?Run through the release engine}"]
+    depends_on: !override
+      db:
+        condition: service_healthy
+
+networks:
+  gateway:
+    external: true
+    name: ${AGENT_GATEWAY_NETWORK:?Set AGENT_GATEWAY_NETWORK on the host}
+
+secrets:
+  postgres_password:
+    file: ${AF_SECRETS_DIR:?Run through the release engine}/POSTGRES_PASSWORD
+  telegram_bot_token:
+    file: ${AF_SECRETS_DIR:?Run through the release engine}/TELEGRAM_BOT_TOKEN
+  gateway_api_key:
+    file: ${AF_SECRETS_DIR:?Run through the release engine}/GATEWAY_API_KEY
+  restic_password:
+    file: ${AF_SECRETS_DIR:?Run through the release engine}/RESTIC_PASSWORD

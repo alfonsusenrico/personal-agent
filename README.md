@@ -12,14 +12,17 @@ search, tools, and personal data sync) lives here, with its own keys.
 
 ## Status
 
-Early development; everything runs locally for now.
+Early development. The assistant runs on the owner's server, released by CI and deployed
+by the deployment standard ([docs/deployment.md](docs/deployment.md)); the laptop is for
+development.
 
 | Area | Status |
 |---|---|
 | Bootstrap: settings, logging, migrations, checks | Done |
-| Telegram conversation through the gateway | Done (local) |
-| Profile: names, language, style, learned in conversation | Done (local) |
-| Daily encrypted backups, flagging bad replies | Done (local) |
+| Telegram conversation through the gateway | Done |
+| Profile: names, language, style, learned in conversation | Done |
+| Daily encrypted backups, flagging bad replies | Done |
+| Signed releases, safe deployment, worker health | Done |
 | Reliable long-term memory | Planned |
 | Gmail and Google Calendar sync (read-only) | Planned |
 | Learning your apps' APIs (read-only) | Planned |
@@ -73,7 +76,10 @@ docker compose up --build migrate
 4. **Run:** `docker compose up -d --build worker`. The worker reaches the
    gateway on the host at `host.docker.internal:8360`. Set
    `REPLY_PROFILE=reply_stub` to try the whole path for free; the stub echoes
-   your message.
+   your message. Only one worker may poll a bot: while the server's worker
+   runs, a laptop worker on the same bot makes both unhealthy.
+   `http://127.0.0.1:8380/health` (`AGENT_HEALTH_PORT`) reports the revision
+   and whether polling and the database work.
 5. **Logs:** `docker compose logs -f worker` shows identifiers, counts, and
    timings only.
 

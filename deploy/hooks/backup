@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Pre-migration backup (deployment standard, contracts v1 §5): a new restic repository in
+# $AF_BACKUP_DIR holding one snapshot of the whole database, then checked by reading all
+# its data. The engine runs this after stopping the previous release, so nothing writes;
+# the database is started here and stays up for the migration. The dump streams from
+# pg_dump into restic inside the backup image and never touches the disk unencrypted; a
+# failing dump leaves no snapshot and stops the deployment. The repository opens with the
+# RESTIC_PASSWORD secret, like the daily backups, and has the same snapshot host and file
+# name, so `personal-agent-restore-check` can restore it.
+set -euo pipefail
+umask 077
+bundle="$AF_RELEASE_DIR/bundle"
+
+compose() {
+  docker compose --project-name "$AF_COMPOSE_PROJECT" --project-directory "$bundle" \
+    --env-file "$AF_RUNTIME_FILE" \
+    --file "$bundle/compose.yaml" --file "$bundle/deploy/compose.production.yaml" "$@"
+}
+
+compose up --detach --wait --no-deps db
+# The container runs as the deploy user, which owns $AF_BACKUP_DIR and reads the secrets;
+# restic reads RESTIC_PASSWORD_FILE from the service's environment.
+# shellcheck disable=SC2016  # the variables expand inside the backup container
+compose run --rm --no-deps -T \
+  --user "$(id -u):$(id -g)" \
+  --volume "$AF_BACKUP_DIR:/repository" \
+  --env RESTIC_REPOSITORY=/repository \
+  backup sh -ec '
+    export PGHOST="$DATABASE_HOST" PGUSER="$DATABASE_USER" PGDATABASE="$DATABASE_NAME"
+    PGPASSWORD="$(cat "$DATABASE_PASSWORD_FILE")"
+    export PGPASSWORD
+    restic --no-cache --quiet init
+    restic --no-cache --quiet backup --host personal-agent --tag pre-migration \
+      --stdin-filename personal_agent.dump --stdin-from-command -- pg_dump --format=custom
+    restic --no-cache --quiet check --read-data'
