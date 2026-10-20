@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Run pytest with the local test settings from .env (the test database, and the
-# optional gateway contract target); arguments go to pytest. Database tests fail
-# instead of skipping when the database is missing.
+# Run pytest with the local test database from .env; arguments go to pytest. Database
+# tests fail instead of skipping when the database is missing. The gateway contract test
+# runs when PA_CONTRACT_IMAGE names a published gateway image.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for name in TEST_DATABASE_URL GATEWAY_TEST_URL GATEWAY_TEST_API_KEY; do
+for name in TEST_DATABASE_URL; do
   if [[ -z "${!name:-}" && -f .env ]]; then
     value="$(sed -n "s/^${name}=\([^ ]*\).*/\1/p" .env)"
     if [[ -n "$value" ]]; then

@@ -13,11 +13,11 @@ import sys
 from datetime import timedelta
 
 import psycopg
-from llm_gateway_client import AuthenticationError, GatewayClient, GatewayError
 
 from personal_agent.clock import utc_now
 from personal_agent.conversation.runner import RunnerConfig, TurnRunner
 from personal_agent.db.pool import create_pool
+from personal_agent.gateway.api import AuthenticationError, GatewayClient, GatewayError
 from personal_agent.logging_setup import configure_logging
 from personal_agent.settings import SettingsError, WorkerSettings, load_worker_settings
 from personal_agent.telegram.api import TelegramApi, TelegramError

@@ -13,18 +13,18 @@ from typing import Any
 
 import psycopg
 import pytest
-from llm_gateway_client import (
+from psycopg import sql
+from psycopg_pool import AsyncConnectionPool
+
+from personal_agent.conversation import notices
+from personal_agent.db.migrate import MIGRATIONS_DIR, apply_migrations, discover
+from personal_agent.gateway.api import (
     BudgetExhaustedError,
     Completed,
     ExecutionUnknownError,
     RetryableError,
     StreamEvent,
 )
-from psycopg import sql
-from psycopg_pool import AsyncConnectionPool
-
-from personal_agent.conversation import notices
-from personal_agent.db.migrate import MIGRATIONS_DIR, apply_migrations, discover
 from personal_agent.logging_setup import quiet_url_logging
 from personal_agent.telegram import poller as poller_module
 from personal_agent.telegram.rich import RICH_MAX_CHARS

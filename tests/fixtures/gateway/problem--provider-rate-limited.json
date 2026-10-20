@@ -1,0 +1,14 @@
+{
+  "body": {
+    "code": "provider_rate_limited",
+    "detail": "Provider code: stub_rate_limited.",
+    "request_id": "f066c4a59da84236a3d09594f5fbf85d",
+    "status": 429,
+    "title": "Provider is rate limiting",
+    "type": "/problems/provider-rate-limited"
+  },
+  "headers": {
+    "retry-after": "1"
+  },
+  "status": 429
+}

@@ -1,0 +1,10 @@
+{
+  "body": {
+    "contract_version": 2,
+    "display_name": "Personal agent recording",
+    "environment": "development",
+    "project_id": "pa_record"
+  },
+  "headers": {},
+  "status": 200
+}

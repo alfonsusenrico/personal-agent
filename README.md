@@ -159,7 +159,16 @@ tokens and cost to the git-ignored `research/eval/`:
 ```
 
 It needs `TEST_DATABASE_URL`, `GATEWAY_TEST_URL`, and `GATEWAY_TEST_API_KEY`
-in `.env`; the same gateway settings enable the gateway contract test.
+in `.env`.
+
+The agent talks to the gateway only through its HTTP API, with its own client
+(`src/personal_agent/gateway/api.py`); no gateway code is installed. Its tests
+replay responses recorded from a gateway release (`tests/fixtures/gateway/`), and
+the contract test runs the real reply request against a published gateway image:
+
+```bash
+PA_CONTRACT_IMAGE=ghcr.io/alfonsusenrico/llm-gateway/gateway@sha256:... ./scripts/test tests/test_gateway_contract.py
+```
 
 ## Development
 

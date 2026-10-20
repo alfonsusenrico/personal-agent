@@ -1,0 +1,11 @@
+{
+  "body": {
+    "code": "key_malformed",
+    "request_id": "dc2d3617fbb448e7a8a3470ff13e145b",
+    "status": 401,
+    "title": "API key is malformed",
+    "type": "/problems/key-malformed"
+  },
+  "headers": {},
+  "status": 401
+}

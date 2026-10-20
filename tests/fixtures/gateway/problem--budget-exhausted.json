@@ -1,0 +1,14 @@
+{
+  "body": {
+    "code": "budget_exhausted",
+    "request_id": "164a495e1fd6a368f81b2e7e9613c7bc",
+    "status": 429,
+    "title": "Monthly budget exhausted",
+    "type": "/problems/budget-exhausted"
+  },
+  "derived_from_source": true,
+  "headers": {
+    "retry-after": "950400"
+  },
+  "status": 429
+}
