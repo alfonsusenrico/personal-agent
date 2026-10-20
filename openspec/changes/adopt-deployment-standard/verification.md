@@ -52,6 +52,9 @@ engine stopped for the owner (exit 5), as it should. The script was fixed and re
   secrets existed, and a run reads secrets when it starts. The secrets were stored by the
   owner's script and the failed job was re-run; the public key is committed in
   `deploy/release-signing.pub`.
+- Repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` exist (names only). The
+  packages `personal-agent`, `personal-agent/app`, and `personal-agent/backup` answer an
+  anonymous pull with 200 (public with the repository).
 
 ## Not verified yet
 

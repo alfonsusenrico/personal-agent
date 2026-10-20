@@ -25,7 +25,7 @@ Expected Result: the engine can deploy the agent unattended and safely.
 
 ## 2. Owner-approved steps
 
-- [ ] 2.1 Owner: release signing key secrets (owner-run script); the package made public
+- [x] 2.1 Owner: release signing key secrets (owner-run script); the package made public
   after the first publish. Verify: secret names; anonymous read of the image.
 - [ ] 2.2 Production gateway: `personal_agent`'s contract upgraded to the alias-backed
   version; its production request set to the development values; the owner registers the
