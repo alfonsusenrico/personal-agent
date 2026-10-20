@@ -1,0 +1,12 @@
+{
+  "body": {
+    "code": "call_result_expired",
+    "request_id": "adb71e62cc51ec64d7ffdbbb6297fe81",
+    "status": 410,
+    "title": "The stored result has expired",
+    "type": "/problems/call-result-expired"
+  },
+  "derived_from_source": true,
+  "headers": {},
+  "status": 410
+}

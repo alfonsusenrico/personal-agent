@@ -82,6 +82,10 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   backup service (`service.py`), and the restore check (`restore_check.py`).
   They run in the image's `backup` target, which adds `restic` and a
   PostgreSQL 16 client.
+- `src/personal_agent/gateway/api.py`: the agent's own gateway client
+  (`whoami`, streamed `responses`), the problem-code table, and same-ID
+  resubmission. `tests/fixtures/gateway/` holds recorded responses and
+  `record.py` to record them again.
 - `src/personal_agent/gateway/calls.py`: call IDs
   (`pa:{turn.call_key}:{purpose}:{generation}:a{attempt}`), retries after
   `execution_unknown`, and content-free `model_call` records.
@@ -104,6 +108,9 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
   IDs, and a reset or restored database would reuse sequence values.
 - Development and tests use the gateway's free stub model. Live model calls
   cost real money: only run them for tasks the owner authorised.
+- The gateway is reached only through its HTTP API with the agent's own
+  client; never install or import gateway code or packages. When the gateway's
+  API changes, record the fixtures again and update the contract image digest.
 - Every record carries `person_id`, so other people can be added later
   without a data migration.
 - The model writes each platform's own format from that platform's guide
@@ -137,4 +144,4 @@ REPLY_PROFILE=reply_stub docker compose up -d --build worker   # the bot, free s
 ## References
 
 `openspec/specs/`; `openspec/changes/`; the local plan in `research/notes/`;
-the gateway's README and specs for the call contract.
+the gateway's published API reference for the call contract.

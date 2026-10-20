@@ -1,0 +1,8 @@
+{
+  "headers": {
+    "x-concurrency-limit": "2",
+    "x-ratelimit-remaining": "9"
+  },
+  "status": 200,
+  "text": "event: response.started\ndata: {\"provider_call_id\":\"pa:rec:reply:1:a1\",\"provider\":\"stub\",\"model\":\"stub-echo\"}\n\nevent: text.delta\ndata: {\"delta\":\"stub:\"}\n\nevent: text.delta\ndata: {\"delta\":\" Synthetic\"}\n\nevent: text.delta\ndata: {\"delta\":\" hello\"}\n\nevent: response.completed\ndata: {\"provider_call_id\":\"pa:rec:reply:1:a1\",\"status\":\"completed\",\"provider\":\"stub\",\"model\":\"stub-echo\",\"model_alias\":\"stub-echo\",\"definition_digest\":\"8852105cc8af375c6c7a75373bb42100698fea8a61b231f49616429b61925754\",\"service_tier\":\"standard\",\"output_text\":\"stub: Synthetic hello\",\"output_json\":null,\"refusal\":null,\"incomplete_reason\":null,\"structured_output_error\":null,\"tool_calls\":[],\"continuation\":null,\"usage\":{\"input_tokens\":59,\"cached_input_tokens\":0,\"cache_write_tokens\":0,\"output_tokens\":5,\"reasoning_tokens\":null},\"cost_usd\":\"0.00\",\"provider_response_id\":\"stub-pa:rec:reply:1:a1\",\"replayed\":false}\n\n"
+}

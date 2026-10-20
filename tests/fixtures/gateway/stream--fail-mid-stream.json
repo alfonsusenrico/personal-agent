@@ -1,0 +1,8 @@
+{
+  "headers": {
+    "x-concurrency-limit": "2",
+    "x-ratelimit-remaining": "7"
+  },
+  "status": 200,
+  "text": "event: response.started\ndata: {\"provider_call_id\":\"pa:rec:reply:3:a1\",\"provider\":\"stub\",\"model\":\"stub-echo\"}\n\nevent: text.delta\ndata: {\"delta\":\"stub:\"}\n\nevent: text.delta\ndata: {\"delta\":\" Synthetic\"}\n\nevent: error\ndata: {\"code\":\"execution_unknown\",\"status\":502,\"title\":\"Outcome unknown; use a new call ID to try again\",\"detail\":\"Provider code: stub_fail_mid_stream.\"}\n\n"
+}

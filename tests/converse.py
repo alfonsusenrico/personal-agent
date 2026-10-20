@@ -17,11 +17,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import psycopg
-from llm_gateway_client import GatewayClient
 from psycopg import sql
 from psycopg_pool import AsyncConnectionPool
 
 from personal_agent.db.migrate import MIGRATIONS_DIR, apply_migrations, discover
+from personal_agent.gateway.api import GatewayClient
 from tests.fakes import FakeClock
 from tests.scripted import ScriptRun, load_script, new_agent, run_script, script_paths
 

@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from llm_gateway_client import CallResult, Completed, StreamEvent
 from psycopg_pool import AsyncConnectionPool
 
+from personal_agent.gateway.api import CallResult, Completed, StreamEvent
 from personal_agent.gateway.calls import Responses
 from tests.fakes import (
     OWNER_ID,

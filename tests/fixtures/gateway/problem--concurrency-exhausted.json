@@ -1,0 +1,14 @@
+{
+  "body": {
+    "code": "concurrency_exhausted",
+    "request_id": "1dc89c851c25199536685855bfdd733a",
+    "status": 429,
+    "title": "Granted concurrency is in use",
+    "type": "/problems/concurrency-exhausted"
+  },
+  "derived_from_source": true,
+  "headers": {
+    "retry-after": "1"
+  },
+  "status": 429
+}

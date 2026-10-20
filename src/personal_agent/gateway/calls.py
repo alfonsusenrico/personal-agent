@@ -23,7 +23,10 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal, Protocol
 
-from llm_gateway_client import (
+from psycopg_pool import AsyncConnectionPool
+
+from personal_agent.clock import Clock
+from personal_agent.gateway.api import (
     BudgetExhaustedError,
     CallResult,
     Completed,
@@ -33,9 +36,6 @@ from llm_gateway_client import (
     StreamEvent,
     TextDelta,
 )
-from psycopg_pool import AsyncConnectionPool
-
-from personal_agent.clock import Clock
 
 # The first attempt and one more after an unusable call ID.
 MAX_ATTEMPTS = 2

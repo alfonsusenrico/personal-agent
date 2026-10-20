@@ -1,0 +1,12 @@
+{
+  "body": {
+    "code": "execution_unknown",
+    "detail": "Provider code: stub_timeout_after_send.",
+    "request_id": "beebe24922fd43f2854b5013913a5785",
+    "status": 502,
+    "title": "Outcome unknown; use a new call ID to try again",
+    "type": "/problems/execution-unknown"
+  },
+  "headers": {},
+  "status": 502
+}

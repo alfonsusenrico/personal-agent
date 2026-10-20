@@ -11,7 +11,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx2
-from llm_gateway_client import (
+from pydantic import SecretStr
+
+from personal_agent.gateway.api import (
     CallResult,
     Completed,
     ExecutionUnknownError,
@@ -22,8 +24,6 @@ from llm_gateway_client import (
     TextDelta,
     Usage,
 )
-from pydantic import SecretStr
-
 from personal_agent.telegram.api import TelegramApi
 
 BOT_TOKEN = "123456:TEST-bot-token-never-logged"

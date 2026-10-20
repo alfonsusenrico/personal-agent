@@ -3,7 +3,7 @@ schema: spec-driven
 context: |
   Project: Personal Agent - the owner's personal assistant over Telegram: a raw message log, reliable temporal memory, web search, Gmail and Calendar sync (read-only), app learning, and confirmed actions. The first consumer of llm-gateway.
   Capabilities: database, personal-data, background-jobs, llm (deployed is added in the deployment phase).
-  Stack: Python 3.13 (uv, ruff, Pyright, pytest), PostgreSQL 16 with hand-written SQL migrations (psycopg 3), llm-gateway-client for every model call, Docker Compose.
+  Stack: Python 3.13 (uv, ruff, Pyright, pytest), PostgreSQL 16 with hand-written SQL migrations (psycopg 3), the agent's own HTTP client for every model call (no gateway code; the gateway's HTTP API only), Docker Compose.
   Sources of truth: approved specs; the owner's local phased plan (research/, not published); official platform documentation (Telegram Bot API, Google APIs, search provider); the gateway's specs; owner confirmations.
   Boundaries: owns the conversation, memory, tools and the tool loop, web search, personal data sync, and their keys; the gateway owns model provider keys, execution, budget grants, and the ledger.
   Privacy: logs hold identifiers, counts, durations, and states only; never messages, memories, prompts, model output, email, or calendar content. External writes need the owner's confirmation, enforced in code.
