@@ -39,5 +39,5 @@ Expected Result: the agent builds and runs with no gateway code; behaviour is un
 
 ## 3. Delivery
 
-- [ ] 3.1 `verification.md` (revision, commands and counts, what was not verified); push
+- [x] 3.1 `verification.md` (revision, commands and counts, what was not verified); push
   the branch, open the pull request, report its link; the owner merges.
