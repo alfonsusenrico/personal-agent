@@ -11,7 +11,7 @@
 - [x] 1.3 Deploy files, the backup hook, framework tools copied from a framework commit,
   Compose for production. Verify: `contracts.py` on both manifests; the hook writes and
   checks a restic snapshot against a throwaway database.
-- [ ] 1.4 CI: `ci.yml` (Postgres service, `REQUIRE_DB=1`, contract test, both image
+- [x] 1.4 CI: `ci.yml` (Postgres service, `REQUIRE_DB=1`, contract test, both image
   targets), `release.yml`, `af-release.yml`; `default:ci` override removed. Verify:
   actionlint; a green pull request run.
 - [x] 1.5 Engine rehearsal on the laptop against a loopback registry: install, upgrade with
@@ -25,7 +25,7 @@ Expected Result: the engine can deploy the agent unattended and safely.
 
 ## 2. Owner-approved steps
 
-- [ ] 2.1 Owner: release signing key secrets (owner-run script); the package made public
+- [x] 2.1 Owner: release signing key secrets (owner-run script); the package made public
   after the first publish. Verify: secret names; anonymous read of the image.
 - [ ] 2.2 Production gateway: `personal_agent`'s contract upgraded to the alias-backed
   version; its production request set to the development values; the owner registers the
