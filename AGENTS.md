@@ -19,6 +19,7 @@ The owner's personal assistant over Telegram, and the first consumer of
   - stores or caches web search results (search provider terms).
 
 Capabilities: database, deployed, personal-data, background-jobs, llm
+Delivery: us (released through the deployment standard; the owner's `v*` tag deploys)
 Design surface: Telegram conversation (no web UI)
 Language: code, identifiers, logs, and docs are English. The assistant
 replies in the language of the owner's latest message; fixed notices are in
@@ -147,6 +148,11 @@ Releases: merge to `main` publishes, a `vX.Y.Z` tag deploys production
 - Debt (owner decision, 2026-10-20): backups have no off-host copy. Payback: a
   follow-up change adds a restic copy to a second location two weeks after the
   first production deployment.
+
+## Overrides
+
+- `default:no-billed`: paid model replies through the gateway, within this project's
+  production grant (USD 2.75 a month granted, USD 0.30 per call). Owner, 2026-10-21.
 
 ## References
 

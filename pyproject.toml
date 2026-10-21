@@ -37,7 +37,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-# Copied from the agent framework unchanged; its own checks cover it.
+# Copied from Pakem unchanged; its own checks cover it.
 extend-exclude = ["deploy/af"]
 
 [tool.ruff.lint]

@@ -1,5 +1,5 @@
 #!/bin/sh
-# agent-framework commit-msg hook: subject-only conventional commits.
+# Pakem commit-msg hook: subject-only conventional commits.
 # Self-contained on purpose (it is copied into each repository's .githooks/).
 
 # Keep SUBJECT_PATTERN identical to the copy in hooks/pre-push; tests assert it.

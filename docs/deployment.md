@@ -1,7 +1,7 @@
 # Deployment
 
-The agent is released and deployed by the owner's deployment standard (agent-framework
-ADR 0009, contracts v1): CI builds and signs each release once, a `vX.Y.Z` tag promotes it,
+The agent is released and deployed by the owner's deployment standard (Pakem ADR
+0009, contracts v1): CI builds and signs each release once, a `vX.Y.Z` tag promotes it,
 and the server's pull agent deploys it with the standard release engine. The laptop keeps
 the code, the tests, and the stub conversation scripts; only one worker may poll the bot.
 
