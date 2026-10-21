@@ -27,16 +27,16 @@ Expected Result: the engine can deploy the agent unattended and safely.
 
 - [x] 2.1 Owner: release signing key secrets (owner-run script); the package made public
   after the first publish. Verify: secret names; anonymous read of the image.
-- [ ] 2.2 Production gateway: `personal_agent`'s contract upgraded to the alias-backed
+- [x] 2.2 Production gateway: `personal_agent`'s contract upgraded to the alias-backed
   version; its production request set to the development values; the owner registers the
   project's OpenAI key (write-only); a production key issued straight into the agent's
   secret store. Verify: the exported contract's
   production request; credential metadata only; secret names and sizes only.
-- [ ] 2.3 Server: host config, placement, secrets (Telegram token and restic password moved
+- [x] 2.3 Server: host config, placement, secrets (Telegram token and restic password moved
   by an owner-run script; a new database password). Verify: names, modes, and sizes only.
-- [ ] 2.4 Cutover: laptop backup service stopped, final backup and sealed dump, restore on
+- [x] 2.4 Cutover: laptop backup service stopped, final backup and sealed dump, restore on
   the server in one transaction. Verify: per-table row counts and a content checksum match.
-- [ ] 2.5 Tag `v0.1.0`; the agent deploys. Verify: deployment record, `/health` commit, the
+- [ ] 2.5 Tag `v0.1.0` (failed, see verification.md) and then `v0.1.1`; the agent deploys. Verify: deployment record, `/health` commit, the
   Telegram notice. Owner-authorised: one real reply (paid model) — the owner writes to the
   bot and checks the reply, `/profile`, and a 👎 flag.
 - [ ] 2.6 After two weeks and with the owner's approval: remove the laptop database

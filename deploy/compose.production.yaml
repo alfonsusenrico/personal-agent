@@ -5,10 +5,12 @@
 #   the secrets group (AF_SECRETS_GID) to read them.
 # - The engine runs migrations itself (`migrate` in deploy/release.toml), so the local
 #   `migrate` service is off and the worker and backup wait only for the database.
-# - The worker joins the production gateway's network (AGENT_GATEWAY_NETWORK).
+# - The worker joins the production gateway's network (AGENT_GATEWAY_NETWORK), where `db`
+#   is the gateway's database, so the agent's database is reached by a name only this
+#   project uses (scripts/check enforces it).
 x-database-settings: &database-settings
   DATABASE_URL: ""
-  DATABASE_HOST: db
+  DATABASE_HOST: personal-agent-db
   DATABASE_NAME: ${POSTGRES_DB:?Run through the release engine}
   DATABASE_USER: ${POSTGRES_USER:?Run through the release engine}
   DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
@@ -22,6 +24,9 @@ services:
     secrets: [postgres_password]
     # Only the stack itself reaches the database on the server.
     ports: !reset []
+    networks:
+      default:
+        aliases: [personal-agent-db]
 
   migrate:
     profiles: [local]

@@ -56,6 +56,44 @@ engine stopped for the owner (exit 5), as it should. The script was fixed and re
   packages `personal-agent`, `personal-agent/app`, and `personal-agent/backup` answer an
   anonymous pull with 200 (public with the repository).
 
+## Production preparation (2026-10-21)
+
+- Gateway: `personal_agent` upgraded to contract version 2 (`reply` names
+  `openai-gpt-6-luna`); production request 30 rpm, concurrency 2, USD 5.00, ceiling USD
+  0.05; OpenAI credential `configured: true` (metadata only). The gateway shares one
+  monthly pool, so production was granted USD 1.375; on the owner's choice the unused
+  development request on the production gateway was set to zero, and production is now
+  granted USD 2.75, 27 rpm, concurrency 1.
+- Server (owner-run script): host config and public key 0640 root:af; base 0700 and
+  `placement.env` 0600 af:af with the four placement names; daily backup folder uid and gid
+  10001, 0700; secrets `GATEWAY_API_KEY`, `POSTGRES_PASSWORD`, `RESTIC_PASSWORD`,
+  `TELEGRAM_BOT_TOKEN` 0640 af:af (sizes only checked). The production key was issued on
+  the server straight into the store.
+- Cutover: the laptop worker had been stopped since 2026-10-19. The laptop's restic writes
+  to its bind-mounted repository fail since a Docker restart (`sync ...: bad file
+  descriptor`, retried forever; last good snapshot 2026-10-20), so the final snapshot went
+  to a Docker volume on the laptop (checked); the laptop backup service is stopped. A
+  pre-seeded production volume with the Compose labels received the laptop dump streamed
+  over SSH into `pg_restore --single-transaction --exit-on-error --no-owner`: 16 tables
+  (row count and content md5) and 13 sequences match. Compose 5.6.0 on the server keeps
+  such a volume and its data (probed with a throwaway project).
+
+## First deployment: v0.1.0 failed
+
+- The engine started the database and ran the migration in a `worker` container, which
+  failed with `OperationalError`; as a first deployment, everything stayed stopped and the
+  owner was notified. The agent's database logged no connection; the gateway's database
+  logged `password authentication failed for user "personal_agent"` / `Role
+  "personal_agent" does not exist`. The worker also joins the gateway's network, where
+  `db` is the gateway's database, and Docker's resolver answered with that one.
+- Fix (`v0.1.1`): the agent's database has the alias `personal-agent-db` on its own
+  network and `DATABASE_HOST` uses it; `scripts/check` refuses a production
+  `DATABASE_HOST` that is `db` or not an alias of `db` (it fails on the old file). A laptop
+  probe with a stand-in gateway network holding its own `db` showed, from the worker,
+  `db` resolving to the stand-in and `personal-agent-db` to the agent's database. The
+  rehearsal missed it because its stand-in gateway network had no `db`.
+- Nothing was written to either database; the production volume was untouched.
+
 ## Not verified yet
 
-- Everything in phase 2 (owner steps, cutover, `v0.1.0`, the Telegram check).
+- 2.5: `v0.1.1` deployment record, `/health` commit, the Telegram notice, the owner's check.

@@ -13,11 +13,25 @@ uv run pyright
 # combination as the release engine runs it.
 env TELEGRAM_ALLOWED_USER_IDS=1001 BACKUP_DIR=/tmp/backups \
   docker compose --env-file /dev/null config -q
-env AF_IMAGE_APP=app AF_IMAGE_BACKUP=backup AF_SECRETS_DIR=/run/af AF_SECRETS_GID=1000 \
-  TELEGRAM_ALLOWED_USER_IDS=1001 BACKUP_DIR=/srv/backups AGENT_HEALTH_PORT=8380 \
-  AGENT_GATEWAY_NETWORK=gateway \
-  docker compose --env-file deploy/env/production.env \
-  --file compose.yaml --file deploy/compose.production.yaml config -q
+production_config() {
+  env AF_IMAGE_APP=app AF_IMAGE_BACKUP=backup AF_SECRETS_DIR=/run/af AF_SECRETS_GID=1000 \
+    TELEGRAM_ALLOWED_USER_IDS=1001 BACKUP_DIR=/srv/backups AGENT_HEALTH_PORT=8380 \
+    AGENT_GATEWAY_NETWORK=gateway \
+    docker compose --env-file deploy/env/production.env \
+    --file compose.yaml --file deploy/compose.production.yaml config "$@"
+}
+production_config -q
+# The worker shares the gateway's network, where `db` is the gateway's database: every
+# service reaches the agent's database by an alias only this project uses.
+production_config --format json | python3 -c '
+import json, sys
+services = json.load(sys.stdin)["services"]
+aliases = services["db"]["networks"]["default"].get("aliases") or []
+for name, service in services.items():
+    host = (service.get("environment") or {}).get("DATABASE_HOST")
+    if host is not None and (host == "db" or host not in aliases):
+        sys.exit(f"{name}: DATABASE_HOST {host!r} is not a project-only alias of db")
+'
 python3 deploy/af/contracts.py project-config deploy/release.toml
 python3 deploy/af/contracts.py settings deploy/settings.toml
 openspec validate --all --no-interactive

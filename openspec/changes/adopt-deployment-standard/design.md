@@ -51,7 +51,9 @@ revision over HTTP); a framework change for command-based health checks (the age
   `TELEGRAM_BOT_TOKEN`, `GATEWAY_API_KEY`, `RESTIC_PASSWORD`; the settings accept
   `NAME_FILE` for each, and the database URL is built from `DATABASE_HOST`,
   `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD_FILE`, as the gateway does, so
-  no URL with a password is ever written. A secret file open to others or writable by its
+  no URL with a password is ever written. The host is `personal-agent-db`, an alias of the database on
+  the project's own network: the worker also joins the gateway's network, where `db` is the
+  gateway's database. A secret file open to others or writable by its
   group is refused.
 - Placement (host, never committed): `TELEGRAM_ALLOWED_USER_IDS`, `BACKUP_DIR`,
   `AGENT_HEALTH_PORT`, `AGENT_GATEWAY_NETWORK`.
