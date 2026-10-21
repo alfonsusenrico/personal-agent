@@ -69,8 +69,13 @@ On a host prepared with the framework's `af_bootstrap.sh`, as root:
 On the production gateway, with its admin command:
 
 1. `project upgrade-contract personal_agent`, so the profiles name catalogue aliases.
-2. `project set-request personal_agent --env production` with the development values: 30
-   requests a minute, 2 at a time, USD 5 a month, USD 0.05 per call.
+2. `project set-request personal_agent --env production`: 30 requests a minute, 2 at a time,
+   USD 5 a month, and USD 0.30 per call. The production gateway reserves each reply's worst
+   case before it runs (about USD 0.27 for `openai-gpt-6-luna`; the gateway's paid
+   accounting guide) and charges the real cost after, so a lower per-call ceiling refuses
+   every reply with `cost_ceiling_exceeded`. Development runs on the laptop's gateway, so
+   the development request on the production gateway stays at zero; the gateway shares
+   one monthly pool between projects, and `grants show` shows what was granted.
 3. Register the project's OpenAI key with the gateway's write-only credential command.
 4. Issue the production key and pipe it straight into `secret-set GATEWAY_API_KEY`.
 
