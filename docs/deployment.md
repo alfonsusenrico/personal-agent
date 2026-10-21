@@ -47,7 +47,8 @@ they hold no secrets or host details.
 
 Containers read secrets as files (`<NAME>_FILE`), and the database URL is built from
 `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD_FILE`, so no URL
-with a password is written anywhere. A secret file open to others, or writable by its group,
+with a password is written anywhere. The host is `personal-agent-db`, a name only this project uses:
+the worker also joins the gateway's network, where `db` is the gateway's database. A secret file open to others, or writable by its group,
 is refused at startup.
 
 ## Host setup (owner)
@@ -87,7 +88,7 @@ it writes no pre-migration backup; the laptop's final backup is the fallback.
    unencrypted copy is left on either disk). Compare every table's row count and a content
    checksum on both sides; only hashes and counts are printed. Remove the one-off container
    (the volume stays).
-3. Tag `v0.1.0`. The migration step finds the schema current; the worker answers what
+3. Tag the first version. The migration step finds the schema current; the worker answers what
    Telegram kept while nothing polled.
 4. Send a message, check `/profile`, and flag a reply with 👎.
 5. Keep the laptop database stopped for two weeks as a fallback, then remove it with the
