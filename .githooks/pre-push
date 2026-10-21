@@ -1,9 +1,11 @@
 #!/bin/sh
-# agent-framework pre-push hook: re-validate pushed commit messages and keep
+# Pakem pre-push hook: re-validate pushed commit messages and keep
 # pushes to protected branches to documentation-only changes.
 # Self-contained on purpose (it is copied into each repository's .githooks/).
 # Protected branches come from the multi-valued git config key
-# agentframework.protectedBranch; when it is unset they are main and master.
+# pakem.protectedBranch, or the former agentframework.protectedBranch in a
+# repository configured before the rename; when both are unset they are main
+# and master.
 # Set AF_ALLOW_PROTECTED_PUSH=1 (or the older AF_ALLOW_MAIN_PUSH=1) to bypass only
 # the protected-branch documentation rule; commit messages are still checked.
 
@@ -14,7 +16,10 @@ MAX_SUBJECT_LENGTH=72
 status=0
 
 # One branch name per line; git prints each configured value on its own line.
-protected_branches=$(git config --get-all agentframework.protectedBranch 2>/dev/null)
+protected_branches=$(git config --get-all pakem.protectedBranch 2>/dev/null)
+if [ -z "$protected_branches" ]; then
+    protected_branches=$(git config --get-all agentframework.protectedBranch 2>/dev/null)
+fi
 if [ -z "$protected_branches" ]; then
     protected_branches='main
 master'
