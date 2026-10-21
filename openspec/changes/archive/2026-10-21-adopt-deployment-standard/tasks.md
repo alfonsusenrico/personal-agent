@@ -36,12 +36,13 @@ Expected Result: the engine can deploy the agent unattended and safely.
   by an owner-run script; a new database password). Verify: names, modes, and sizes only.
 - [x] 2.4 Cutover: laptop backup service stopped, final backup and sealed dump, restore on
   the server in one transaction. Verify: per-table row counts and a content checksum match.
-- [ ] 2.5 Tag `v0.1.0` (failed, see verification.md) and then `v0.1.1`; the agent deploys. Verify: deployment record, `/health` commit, the
+- [x] 2.5 Tag `v0.1.0` (failed, see verification.md) and then `v0.1.1`; the agent deploys. Verify: deployment record, `/health` commit, the
   Telegram notice. Owner-authorised: one real reply (paid model) — the owner writes to the
   bot and checks the reply, `/profile`, and a 👎 flag.
 - [ ] 2.6 After two weeks and with the owner's approval: remove the laptop database
-  (backup kept). Verify: the owner's confirmation.
-- [ ] 2.7 `verification.md` complete; push, pull request, report its link; the owner
+  (backup kept). Verify: the owner's confirmation. Follow-up after archiving, due
+  2026-11-04.
+- [x] 2.7 `verification.md` complete; push, pull request, report its link; the owner
   merges and decides the deployment.
 
 Expected Result: the assistant runs from the server on the production gateway, with its

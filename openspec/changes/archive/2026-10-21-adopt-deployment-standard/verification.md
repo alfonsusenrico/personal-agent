@@ -94,6 +94,26 @@ engine stopped for the owner (exit 5), as it should. The script was fixed and re
   rehearsal missed it because its stand-in gateway network had no `db`.
 - Nothing was written to either database; the production volume was untouched.
 
+## Production deployment: v0.1.1 (2026-10-21)
+
+- Release run for the tag: `tag-version` and `promote v0.1.1` passed after the `main`
+  publish of `43efedc`. The server's agent deployed it at 01:30:34Z: `deployed`, exit 0.
+- `/health`: 200, `{"status":"ok","revision":"43efedc…","polling":true,"database":true}`.
+  Worker, backup service, and database running; the worker logged the production gateway
+  project and its revision. Migrations: 5 recorded, the schema current; 30 turns and 60
+  messages, as on the laptop.
+- The server's daily backup service created its repository and saved a snapshot at start.
+- Owner check on Telegram: `/profile` showed the moved profile. The first two messages were
+  answered with the apology: the gateway refused them with `cost_ceiling_exceeded`.
+  Gateway 0.13.0 reserves the full-context worst case for `openai-gpt-6-luna` (1,050,000
+  input tokens at the long-context rate plus the 2,000-token output: about USD 0.264), above
+  the USD 0.05 per-call ceiling copied from development. The owner set the production
+  ceiling to USD 0.30 (it admits every call of this profile and refuses a configuration
+  that reserves more). Then three replies completed (USD 0.000475, 0.000347, 0.000271),
+  the reply used the profile and recent conversations, and the owner's 👎 was stored as
+  feedback 4.
+
 ## Not verified yet
 
-- 2.5: `v0.1.1` deployment record, `/health` commit, the Telegram notice, the owner's check.
+- 2.6: the laptop database stays as the fallback until 2026-11-04; its removal needs the
+  owner's approval then.
