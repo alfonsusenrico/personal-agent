@@ -1,20 +1,22 @@
 # Deployment
 
-The agent is released and deployed by the owner's deployment standard (Pakem ADR
-0009, contracts v1): CI builds and signs each release once, a `vX.Y.Z` tag promotes it,
-and the server's pull agent deploys it with the standard release engine. The laptop keeps
-the code, the tests, and the stub conversation scripts; only one worker may poll the bot.
+The agent is released with `pakem release` (Pakem ADR 0010, direct delivery, on the
+deployment contracts v1): the owner's device signs a request for the exact commit and
+sends its source to the server, which builds both images once and deploys them with the
+standard release engine. The laptop keeps the code, the tests, and the stub conversation
+scripts; only one worker may poll the bot.
 
 ## Releases
 
-1. A pull request runs `ci.yml`: `./scripts/check` with a Postgres service (database tests
-   required), the contract test against the pinned gateway image, and builds of both images.
-2. A merge to `main` runs `release.yml`: the same checks, then `af-release.yml` builds the
-   `app` image (the Dockerfile's `runtime` stage: migrate and worker) and the `backup` image
-   (`restic` and a PostgreSQL 16 client) once for amd64 and arm64, signs them, the deploy
-   bundle (`compose.yaml` and `deploy/`), and the release record, and publishes them.
-3. A `vX.Y.Z` tag matching `pyproject.toml` promotes that commit's release to production
-   without rebuilding. The server's agent deploys it within a few minutes:
+1. Every pull request, push to `main`, and `v*` tag runs `ci.yml`: `./scripts/check` with
+   a Postgres service (database tests required), the contract test against the pinned
+   gateway image, and builds of both images. `pakem release` refuses a commit whose checks
+   did not pass.
+2. `pakem release promote vX.Y.Z --production` (the project has no staging; the version
+   should match `pyproject.toml`) sends the current `main` commit to the server, which
+   builds the `app` image (the Dockerfile's `runtime` stage: migrate and worker) and the
+   `backup` image (`restic` and a PostgreSQL 16 client) for its own architecture, then
+   deploys:
    - the old worker stops (30 seconds to finish; a reply in progress is finished after the
      restart, never paid twice), so polling pauses for seconds and Telegram keeps the updates;
    - a release with migrations first writes a pre-migration backup (below) and stops if it
@@ -23,13 +25,13 @@ the code, the tests, and the stub conversation scripts; only one worker may poll
      the previous release is restored (same schema) or everything stays stopped for the owner
      (schema changed);
    - every result is sent to the owner on Telegram.
-4. A manual run of `release.yml` rolls production back to an earlier published commit.
 
-`af-release.yml`, `deploy/af/af_publish.py`, and `deploy/af/contracts.py` are framework
-copies; update them together from a framework commit. The release signing key lives in the
-repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`; the public half is
-`deploy/release-signing.pub`. The release packages on GHCR are public, like the repository;
-they hold no secrets or host details.
+   The commit is tagged `vX.Y.Z` only after it deployed.
+3. `pakem release rollback previous --production` returns to the release that ran before,
+   from the builds the server keeps; `pakem release history` lists every release.
+
+`deploy/af/contracts.py` is the framework's contract check; update it from a framework
+release.
 
 ## Settings
 
@@ -53,14 +55,17 @@ is refused at startup.
 
 ## Host setup (owner)
 
-On a host prepared with the framework's `af_bootstrap.sh`, as root:
+From the owner's terminal, with the owner's own admin login:
 
-1. Host config `/etc/af/hosts/personal-agent-production.toml` with
-   `pointer = "ghcr.io/<owner>/personal-agent:release-production"`, the public key copied to
-   `/etc/af/keys/personal-agent.pub`, and the host's notifier.
-2. Base `<deploy root>/personal-agent/production/` owned by the deploy user (0700) with
-   `placement.env` as above.
-3. `BACKUP_DIR` created for the container user: owned by uid 10001, mode 0700.
+1. `pakem setup host <ssh-target> --name <host>` (with the flags the server was set up
+   with) installs or updates the engine and the direct delivery receiver.
+2. `pakem host allow-device <host> --project-dir <this repository>` lets this device's key
+   release the agent: it writes the direct host config and the base
+   `<deploy root>/personal-agent/production/` (owned by the deploy user, 0700), and names
+   any missing placement or secret settings. A server that ran the registry release passes
+   `--switch-from-registry` once; its placement, secrets, and backups stay.
+3. `placement.env` as above, and `BACKUP_DIR` created for the container user: owned by uid
+   10001, mode 0700.
 4. The four secrets. Keep a copy of `RESTIC_PASSWORD` in a password manager: without it no
    backup can be read.
 
@@ -93,7 +98,7 @@ it writes no pre-migration backup; the laptop's final backup is the fallback.
    unencrypted copy is left on either disk). Compare every table's row count and a content
    checksum on both sides; only hashes and counts are printed. Remove the one-off container
    (the volume stays).
-3. Tag the first version. The migration step finds the schema current; the worker answers what
+3. Release the first version. The migration step finds the schema current; the worker answers what
    Telegram kept while nothing polled.
 4. Send a message, check `/profile`, and flag a reply with 👎.
 5. Keep the laptop database stopped for two weeks as a fallback, then remove it with the

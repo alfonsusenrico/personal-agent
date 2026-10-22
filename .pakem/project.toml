@@ -1,0 +1,11 @@
+# The project's fixed facts, written by `pakem project init` or `adopt` (ADR 0011).
+name = "personal-agent"
+forge = "github"
+repository = "alfonsusenrico/personal-agent"
+visibility = "public"
+kind = "service"
+delivery = "us"
+stack = "python"
+environments = ["production"]
+capabilities = ["background-jobs", "database", "deployed", "llm", "personal-data"]
+delivery_note = ""

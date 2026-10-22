@@ -1,0 +1,65 @@
+# Decisions on this project's gaps (ADR 0011). Written by `pakem decide`; committed so every
+# agent on every device sees them. States: answered, provisional, pending.
+
+[decisions."backup.restore"]
+state = "answered"
+answer = "pg_dump streamed into restic in deploy/hooks/backup, checked by reading all data; restore with restic dump into pg_restore"
+reason = "deploy/hooks/backup and docs/deployment.md Backups"
+decided = "2026-10-22"
+
+[decisions."contract.image"]
+state = "provisional"
+reason = "owner asked 2026-10-22; agent recommendation recorded provisionally"
+assumption = "the CI contract test keeps the gateway image it pins by digest; that GHCR package stays"
+revisit = "the gateway's API changes, or the package is to be deleted"
+question = "Which gateway image does the CI contract test use once the gateway no longer publishes images?"
+blocks = ["ci"]
+decided = "2026-10-22"
+
+[decisions."data.moves"]
+state = "answered"
+answer = "none pending: the laptop data moved to production on 2026-10-21"
+reason = "adopt-deployment-standard verification (archived)"
+decided = "2026-10-22"
+
+[decisions."gateway.profile"]
+state = "answered"
+answer = "the personal_agent production grant: USD 2.75 a month granted, USD 0.30 per call"
+reason = "AGENTS.md Overrides default:no-billed (owner, 2026-10-21)"
+decided = "2026-10-22"
+
+[decisions."health.proof"]
+state = "answered"
+answer = "custom: /health reports revision, polling within 90 seconds, no other consumer of the bot, and the database"
+reason = "deploy/release.toml [health] and docs/deployment.md Health"
+decided = "2026-10-22"
+
+[decisions."language.text"]
+state = "answered"
+answer = "English code, logs, and docs; replies in the language of the owner's latest message; fixed notices in English and Indonesian"
+reason = "AGENTS.md Language line"
+decided = "2026-10-22"
+
+[decisions."migrations.rule"]
+state = "answered"
+answer = "hand-written, checksummed, forward-only SQL migrations, expand then contract"
+reason = "AGENTS.md architecture map"
+decided = "2026-10-22"
+
+[decisions."network.shared"]
+state = "answered"
+answer = "the worker joins the gateway's network (AGENT_GATEWAY_NETWORK) and reaches it as api; its own database is personal-agent-db, never db"
+reason = "deploy/compose.production.yaml and docs/deployment.md"
+decided = "2026-10-22"
+
+[decisions."settings.sources"]
+state = "answered"
+answer = "defaults in deploy/env/production.env; placement TELEGRAM_ALLOWED_USER_IDS, BACKUP_DIR, AGENT_HEALTH_PORT, AGENT_GATEWAY_NETWORK; secrets POSTGRES_PASSWORD, TELEGRAM_BOT_TOKEN, GATEWAY_API_KEY, RESTIC_PASSWORD"
+reason = "deploy/settings.toml and docs/deployment.md Settings"
+decided = "2026-10-22"
+
+[decisions."single-instance"]
+state = "answered"
+answer = "single instance: one worker polls the bot; stop-start only"
+reason = "docs/deployment.md and deploy/release.toml switch"
+decided = "2026-10-22"
