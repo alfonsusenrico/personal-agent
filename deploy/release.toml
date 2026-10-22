@@ -16,6 +16,10 @@ schema_version = { glob = "src/personal_agent/db/migrations/*.sql" }
 switch = "stop-start"
 drain_seconds = 30
 
+# The server builds the signed source of each commit (Pakem ADR 0010, direct delivery).
+[build]
+runner = "local"
+
 [health]
 service = "worker"
 path = "/health"
