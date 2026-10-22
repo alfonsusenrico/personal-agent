@@ -5,6 +5,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-22
+
 ### Changed
 
 - Releases move to direct delivery (Pakem ADR 0010): `pakem release` sends the signed

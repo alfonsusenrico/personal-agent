@@ -1,6 +1,6 @@
 [project]
 name = "personal-agent"
-version = "0.1.1"
+version = "0.2.0"
 description = "Personal assistant over Telegram with reliable memory, personal data sync, and app learning."
 readme = "README.md"
 license = "MIT"
