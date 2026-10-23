@@ -17,6 +17,6 @@ Expected Result: the repository releases only through `pakem release`.
   2026-10-22 as one command, `pakem setup host msi`, with release port 2223.)
 - [x] 2.2 Owner-instructed `pakem release promote v0.2.0 --production`. Verify: deployment
   record `deployed`, `/health` revision, a Telegram reply, tag pushed. (2026-10-23.)
-- [ ] 2.3 Owner: delete the repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`.
+- [x] 2.3 Owner: delete the repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`. (2026-10-23; the repository has no secrets now.)
 
 Expected Result: production runs a direct release; the owner merges and the change is archived.
