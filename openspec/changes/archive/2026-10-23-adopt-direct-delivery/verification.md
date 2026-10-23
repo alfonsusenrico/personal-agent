@@ -11,6 +11,4 @@ Change `adopt-direct-delivery`, 2026-10-22 and 2026-10-23.
 | `v0.2.0` (`pakem release promote v0.2.0 --production`, device key only) | `app` and `backup` images built on the server; pre-migration backup; `/health` reported `e189b918292d`; result `deployed`; tag `v0.2.0` pushed after the deployment |
 | Owner checks (2026-10-23) | the deployment notice arrived; the bot replies correctly |
 
-## Not verified yet
-
-- Deleting the `COSIGN_*` repository secrets (task 2.3, owner).
+| Repository secrets (2026-10-23) | `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` deleted by the owner; `gh secret list` shows none |
